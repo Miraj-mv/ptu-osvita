@@ -1424,6 +1424,7 @@ tbody tr.clickable:hover td{background:#EEF2FF}
       <div class="nav-item" onclick="nav(this,'orders')"><span class="ni">📄</span>Накази</div>
       <div class="nav-item" onclick="nav(this,'dicts')"><span class="ni">📖</span>Довідники</div>
       <div class="nav-item" onclick="nav(this,'users')"><span class="ni">👥</span>Користувачі</div>
+      <div class="nav-item" onclick="nav(this,'reports')"><span class="ni">📊</span>Звіти</div>
     </nav>
     <div class="sb-footer">
       <div class="sb-year" id="sb-year"></div>
@@ -1441,9 +1442,13 @@ tbody tr.clickable:hover td{background:#EEF2FF}
         <div class="stat-card"><div class="stat-icon">🏫</div><div class="stat-label">Груп</div><div class="stat-val" id="s-groups">—</div></div>
         <div class="stat-card"><div class="stat-icon">📚</div><div class="stat-label">Предметів</div><div class="stat-val" id="s-subjects">—</div></div>
       </div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
-        <div class="card"><div class="card-header">🏫 Групи за курсами</div><div style="padding:14px" id="dash-groups"></div></div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px">
+        <div class="card"><div class="card-header">🏫 Здобувачі за курсами</div><div style="padding:14px" id="dash-groups"></div></div>
         <div class="card"><div class="card-header">📅 Навчальні роки</div><div style="padding:14px" id="dash-years"></div></div>
+      </div>
+      <div class="card">
+        <div class="card-header">👥 Кількість здобувачів у групах</div>
+        <div class="tbl-wrap" id="dash-groups-table"></div>
       </div>
     </div>
 
@@ -1576,6 +1581,56 @@ tbody tr.clickable:hover td{background:#EEF2FF}
         <div id="otab-cancelled" class="tab-content" style="padding:16px"><div id="orders-cancelled"></div></div>
       </div>
     </div>
+    <!-- ЗВІТИ -->
+    <div class="page" id="p-reports">
+      <div class="page-header"><div class="page-title">📊 Звіти</div></div>
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:20px">
+        <div class="card" style="cursor:pointer;transition:all .15s" onmouseover="this.style.borderColor='var(--accent)'" onmouseout="this.style.borderColor='var(--border)'" onclick="generateReport('groups-summary')">
+          <div style="padding:20px;text-align:center">
+            <div style="font-size:36px;margin-bottom:10px">🏫</div>
+            <div style="font-weight:600;font-size:14px">Зведена відомість по групах</div>
+            <div style="font-size:12px;color:var(--muted);margin-top:6px">Кількість здобувачів у кожній групі по курсах</div>
+          </div>
+        </div>
+        <div class="card" style="cursor:pointer;transition:all .15s" onmouseover="this.style.borderColor='var(--accent)'" onmouseout="this.style.borderColor='var(--border)'" onclick="generateReport('pupils-list')">
+          <div style="padding:20px;text-align:center">
+            <div style="font-size:36px;margin-bottom:10px">👥</div>
+            <div style="font-weight:600;font-size:14px">Список здобувачів</div>
+            <div style="font-size:12px;color:var(--muted);margin-top:6px">Повний список з групами та датами народження</div>
+          </div>
+        </div>
+        <div class="card" style="cursor:pointer;transition:all .15s" onmouseover="this.style.borderColor='var(--accent)'" onmouseout="this.style.borderColor='var(--border)'" onclick="generateReport('individuals-list')">
+          <div style="padding:20px;text-align:center">
+            <div style="font-size:36px;margin-bottom:10px">🧑</div>
+            <div style="font-weight:600;font-size:14px">Список фізичних осіб</div>
+            <div style="font-size:12px;color:var(--muted);margin-top:6px">Всі особи в базі з контактами</div>
+          </div>
+        </div>
+        <div class="card" style="cursor:pointer;transition:all .15s" onmouseover="this.style.borderColor='var(--accent)'" onmouseout="this.style.borderColor='var(--border)'" onclick="generateReport('orders-list')">
+          <div style="padding:20px;text-align:center">
+            <div style="font-size:36px;margin-bottom:10px">📄</div>
+            <div style="font-weight:600;font-size:14px">Реєстр наказів</div>
+            <div style="font-size:12px;color:var(--muted);margin-top:6px">Всі накази з типами та статусами</div>
+          </div>
+        </div>
+        <div class="card" style="cursor:pointer;transition:all .15s" onmouseover="this.style.borderColor='var(--accent)'" onmouseout="this.style.borderColor='var(--border)'" onclick="generateReport('expelled-list')">
+          <div style="padding:20px;text-align:center">
+            <div style="font-size:36px;margin-bottom:10px">❌</div>
+            <div style="font-weight:600;font-size:14px">Відраховані здобувачі</div>
+            <div style="font-size:12px;color:var(--muted);margin-top:6px">Список відрахованих та випускників</div>
+          </div>
+        </div>
+        <div class="card" style="cursor:pointer;transition:all .15s" onmouseover="this.style.borderColor='var(--accent)'" onmouseout="this.style.borderColor='var(--border)'" onclick="generateReport('group-by-group')">
+          <div style="padding:20px;text-align:center">
+            <div style="font-size:36px;margin-bottom:10px">📋</div>
+            <div style="font-weight:600;font-size:14px">Списки по групах</div>
+            <div style="font-size:12px;color:var(--muted);margin-top:6px">Окремий список для кожної групи</div>
+          </div>
+        </div>
+      </div>
+      <div id="report-output"></div>
+    </div>
+
     <!-- КОРИСТУВАЧІ -->
     <div class="page" id="p-users">
       <div class="page-header">
@@ -2087,6 +2142,7 @@ function renderPage(p){
   else if(p==='teachers')renderTeachers();
   else if(p==='orders')renderOrders();
   else if(p==='users'){loadUsers();}
+  else if(p==='reports'){document.getElementById('report-output').innerHTML='';}
   else if(p==='dicts'){renderDictMenu();document.getElementById('dict-content').innerHTML='<div class="empty-state">Оберіть довідник зліва</div>';document.getElementById('dict-add-btn').style.display='none';}
 }
 function openModal(id){document.getElementById('modal-'+id).classList.add('open');}
@@ -2151,6 +2207,7 @@ function renderDashboard(){
   const bc={};DB.groups.forEach(g=>{bc[g.curriculum]=(bc[g.curriculum]||0)+1;});
   document.getElementById('dash-groups').innerHTML=[1,2,3,4].filter(c=>bc[c]).map(c=>{const{bg,color}=cc(c);return`<div class="info-row"><span class="info-label">${c} курс</span><span class="badge" style="background:${bg};color:${color}">${bc[c]} груп</span></div>`;}).join('')||'<div class="empty-state">Немає даних</div>';
   document.getElementById('dash-years').innerHTML=DB.years.slice(-5).reverse().map(y=>`<div class="info-row"><span class="info-label">${fmt(y.date_start)}</span><div style="display:flex;align-items:center;gap:6px"><span style="font-size:12px">${fmt(y.date_end)}</span>${y.active?'<span class="badge b-green">Активний</span>':''}</div></div>`).join('')||'—';
+  renderDashGroupsTable();
 }
 
 // ── ФІЗИЧНІ ОСОБИ ──
@@ -3662,6 +3719,275 @@ async function deleteUser(type, id){
   }
   renderUsers();
   notif('notif-users', '✅ Користувача видалено');
+}
+
+// ── ДАШБОРД — таблиця груп ─────────────────────────────────────────────────
+function renderDashGroupsTable(){
+  const el = document.getElementById('dash-groups-table');
+  if(!el) return;
+  const courseColors = {
+    1:{bg:'#EEF2FF',color:'#4F46E5'},
+    2:{bg:'#F0FDF4',color:'#16A34A'},
+    3:{bg:'#FFFBEB',color:'#D97706'},
+    4:{bg:'#EFF6FF',color:'#2563EB'}
+  };
+  // Групуємо по курсах
+  const byCourse = {};
+  DB.groups.forEach(g => {
+    const c = g.curriculum || 1;
+    if(!byCourse[c]) byCourse[c] = [];
+    const cnt = DB.pupils.filter(p => p.id_groups == g.id).length;
+    byCourse[c].push({...g, cnt});
+  });
+
+  let html = `<table><thead><tr>
+    <th>Курс</th><th>Група</th><th>Форма</th><th style="text-align:center">Здобувачів</th><th style="text-align:center">Заповненість</th>
+  </tr></thead><tbody>`;
+
+  let grandTotal = 0;
+  [1,2,3,4].forEach(c => {
+    const groups = byCourse[c] || [];
+    if(!groups.length) return;
+    const courseTotal = groups.reduce((s,g) => s+g.cnt, 0);
+    grandTotal += courseTotal;
+    const {bg, color} = courseColors[c] || courseColors[1];
+
+    groups.forEach((g, idx) => {
+      const isDen = g.id_groups_type === 2;
+      const maxStudents = isDen ? 30 : 25;
+      const pct = Math.round(g.cnt / maxStudents * 100);
+      const barColor = pct >= 90 ? '#16A34A' : pct >= 60 ? '#D97706' : '#DC2626';
+      html += `<tr>
+        ${idx === 0 ? `<td rowspan="${groups.length}" style="background:${bg};color:${color};font-weight:700;text-align:center;border-right:2px solid ${color}33">${c} курс<br><span style="font-size:11px;font-weight:400">${courseTotal} ос.</span></td>` : ''}
+        <td style="font-weight:600">Група ${g.group_number}</td>
+        <td><span class="badge ${isDen?'b-green':'b-amber'}">${isDen?'Денна':'Заочна'}</span></td>
+        <td style="text-align:center;font-weight:700;font-size:15px">${g.cnt}</td>
+        <td style="min-width:140px">
+          <div style="display:flex;align-items:center;gap:8px">
+            <div style="flex:1;height:8px;background:#F3F4F6;border-radius:4px;overflow:hidden">
+              <div style="height:100%;width:${Math.min(pct,100)}%;background:${barColor};border-radius:4px;transition:width .3s"></div>
+            </div>
+            <span style="font-size:11px;color:var(--muted);min-width:30px">${pct}%</span>
+          </div>
+        </td>
+      </tr>`;
+    });
+  });
+
+  html += `<tr style="background:#F9FAFB;font-weight:700">
+    <td colspan="3" style="text-align:right;color:var(--muted);font-size:12px">ВСЬОГО:</td>
+    <td style="text-align:center;font-size:16px">${grandTotal}</td>
+    <td></td>
+  </tr>`;
+
+  html += '</tbody></table>';
+  el.innerHTML = html;
+}
+
+// ── ЗВІТИ ──────────────────────────────────────────────────────────────────
+function generateReport(type){
+  const el = document.getElementById('report-output');
+  el.innerHTML = '<div class="empty-state">Формування звіту...</div>';
+
+  let html = '';
+  const now = new Date().toLocaleDateString('uk-UA', {day:'2-digit',month:'2-digit',year:'numeric'});
+
+  if(type === 'groups-summary'){
+    html = reportGroupsSummary(now);
+  } else if(type === 'pupils-list'){
+    html = reportPupilsList(now);
+  } else if(type === 'individuals-list'){
+    html = reportIndividualsList(now);
+  } else if(type === 'orders-list'){
+    html = reportOrdersList(now);
+  } else if(type === 'expelled-list'){
+    html = reportExpelledList(now);
+  } else if(type === 'group-by-group'){
+    html = reportGroupByGroup(now);
+  }
+
+  el.innerHTML = html;
+}
+
+function reportHeader(title, date){
+  return `<div style="background:#fff;border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;margin-bottom:8px">
+    <div style="padding:14px 18px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between">
+      <div style="font-size:15px;font-weight:700">${title}</div>
+      <div style="display:flex;gap:8px;align-items:center">
+        <span style="font-size:12px;color:var(--muted)">${date}</span>
+        <button class="btn btn-sm btn-primary" onclick="printReport()">🖨 Друк</button>
+      </div>
+    </div>`;
+}
+
+function printReport(){
+  const content = document.getElementById('report-output').innerHTML;
+  const w = window.open('','_blank');
+  w.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8">
+    <title>Звіт — ПТУ Освіта</title>
+    <style>
+      body{font-family:'Arial',sans-serif;font-size:12px;color:#000;margin:20px}
+      table{width:100%;border-collapse:collapse}
+      th,td{border:1px solid #ccc;padding:5px 8px;text-align:left}
+      th{background:#f5f5f5;font-weight:bold}
+      .badge{display:inline;padding:1px 4px;border-radius:3px;font-size:11px}
+      h3{margin:16px 0 8px}
+      .no-print{display:none}
+      @media print{.no-print{display:none}}
+    </style>
+    </head><body>${content}</body></html>`);
+  w.document.close();
+  w.print();
+}
+
+function reportGroupsSummary(date){
+  const courseColors = {1:'#EEF2FF',2:'#F0FDF4',3:'#FFFBEB',4:'#EFF6FF'};
+  let rows = '';
+  let total = 0;
+  [1,2,3,4].forEach(c => {
+    const groups = DB.groups.filter(g=>g.curriculum==c);
+    groups.forEach(g => {
+      const cnt = DB.pupils.filter(p=>p.id_groups==g.id).length;
+      total += cnt;
+      const isDen = g.id_groups_type===2;
+      rows += `<tr>
+        <td style="background:${courseColors[c]};font-weight:600;text-align:center">${c}</td>
+        <td style="font-weight:600">Група ${g.group_number}</td>
+        <td>${isDen?'Денна':'Заочна'}</td>
+        <td style="text-align:center;font-weight:700">${cnt}</td>
+      </tr>`;
+    });
+  });
+  return reportHeader('🏫 Зведена відомість по групах', date) +
+    `<div style="padding:14px 18px">
+    <table><thead><tr><th>Курс</th><th>Група</th><th>Форма</th><th style="text-align:center">Здобувачів</th></tr></thead>
+    <tbody>${rows}
+    <tr style="background:#F9FAFB"><td colspan="3" style="text-align:right;font-weight:700">Всього:</td><td style="text-align:center;font-weight:700">${total}</td></tr>
+    </tbody></table></div></div>`;
+}
+
+function reportPupilsList(date){
+  const studying = DB.pupils.filter(p=>getStudentStatus(p.id_individual)==='studying');
+  let rows = '';
+  let num = 1;
+  studying.forEach(p => {
+    const ind = DB.individuals.find(i=>i.id===p.id_individual);
+    const g = DB.groups.find(gr=>gr.id===p.id_groups);
+    if(!ind) return;
+    const ord = DB.orders.find(o=>o.id===p.id_order);
+    rows += `<tr>
+      <td style="text-align:center">${num++}</td>
+      <td style="font-weight:500">${fullName(ind)}</td>
+      <td>${fmt(ind.date_birth)}</td>
+      <td>${ind.rnokpp||'—'}</td>
+      <td>${g?`Гр. ${g.group_number}`:'—'}</td>
+      <td>${g?`${g.curriculum} курс`:'—'}</td>
+      <td>${ord?`№${ord.number}`:'—'}</td>
+    </tr>`;
+  });
+  return reportHeader(`👥 Список здобувачів освіти (${studying.length} ос.)`, date) +
+    `<div style="padding:14px 18px">
+    <table><thead><tr><th>#</th><th>ПІБ</th><th>Дата нар.</th><th>РНОКПП</th><th>Група</th><th>Курс</th><th>Наказ</th></tr></thead>
+    <tbody>${rows}</tbody></table></div></div>`;
+}
+
+function reportIndividualsList(date){
+  let rows = '';
+  DB.individuals.forEach((ind,i) => {
+    const g = DB.groups.find(gr=>gr.id===ind.id_group_planning);
+    const status = getStudentStatus(ind.id);
+    const statusMap = {studying:'Навчається',planning:'Планує',expelled:'Відрахований',graduated:'Закінчив'};
+    rows += `<tr>
+      <td style="text-align:center">${i+1}</td>
+      <td style="font-weight:500">${fullName(ind)}</td>
+      <td>${fmt(ind.date_birth)}</td>
+      <td>${ind.rnokpp||'—'}</td>
+      <td>${ind.phone_number||'—'}</td>
+      <td>${g?`Гр. ${g.group_number}`:'—'}</td>
+      <td>${statusMap[status]||'—'}</td>
+    </tr>`;
+  });
+  return reportHeader(`🧑 Список фізичних осіб (${DB.individuals.length} ос.)`, date) +
+    `<div style="padding:14px 18px">
+    <table><thead><tr><th>#</th><th>ПІБ</th><th>Дата нар.</th><th>РНОКПП</th><th>Телефон</th><th>Планова гр.</th><th>Статус</th></tr></thead>
+    <tbody>${rows}</tbody></table></div></div>`;
+}
+
+function reportOrdersList(date){
+  let rows = '';
+  DB.orders.forEach((o,i) => {
+    const g = DB.groups.find(gr=>gr.id==o.id_groups);
+    const cnt = DB.orderIndividuals.filter(oi=>oi.order_id==o.id).length;
+    const stateMap = {1:'Чорновик',2:'Активний',3:'Відмінений'};
+    const typeMap = {1:'Зарахування',2:'Відрахування',3:'Випуск'};
+    rows += `<tr>
+      <td style="text-align:center">${i+1}</td>
+      <td style="font-weight:600;font-family:monospace">№${o.number||'—'}</td>
+      <td>${fmt(o.date)}</td>
+      <td>${typeMap[o.order_type||1]||'—'}</td>
+      <td>${stateMap[o.state||1]||'—'}</td>
+      <td style="text-align:center">${cnt}</td>
+    </tr>`;
+  });
+  return reportHeader(`📄 Реєстр наказів (${DB.orders.length})`, date) +
+    `<div style="padding:14px 18px">
+    <table><thead><tr><th>#</th><th>Номер</th><th>Дата</th><th>Тип</th><th>Статус</th><th style="text-align:center">Осіб</th></tr></thead>
+    <tbody>${rows}</tbody></table></div></div>`;
+}
+
+function reportExpelledList(date){
+  const expelled = DB.pupils.filter(p=>getStudentStatus(p.id_individual)==='expelled');
+  const graduated = DB.pupils.filter(p=>getStudentStatus(p.id_individual)==='graduated');
+  let rows = '';
+  let num = 1;
+  [...expelled,...graduated].forEach(p => {
+    const ind = DB.individuals.find(i=>i.id===p.id_individual);
+    const g = DB.groups.find(gr=>gr.id===p.id_groups);
+    const status = getStudentStatus(p.id_individual);
+    if(!ind) return;
+    rows += `<tr>
+      <td style="text-align:center">${num++}</td>
+      <td style="font-weight:500">${fullName(ind)}</td>
+      <td>${fmt(ind.date_birth)}</td>
+      <td>${g?`Гр. ${g.group_number}`:'—'}</td>
+      <td>${status==='expelled'?'<span style="color:#DC2626">Відрахований</span>':'<span style="color:#2563EB">Закінчив навчання</span>'}</td>
+    </tr>`;
+  });
+  return reportHeader(`❌ Відраховані та випускники (${num-1} ос.)`, date) +
+    `<div style="padding:14px 18px">
+    <table><thead><tr><th>#</th><th>ПІБ</th><th>Дата нар.</th><th>Група</th><th>Статус</th></tr></thead>
+    <tbody>${rows||'<tr><td colspan="5" style="text-align:center;color:#9ca3af">Немає даних</td></tr>'}</tbody></table></div></div>`;
+}
+
+function reportGroupByGroup(date){
+  let html = reportHeader('📋 Списки здобувачів по групах', date) + '<div style="padding:14px 18px">';
+  [1,2,3,4].forEach(c => {
+    const groups = DB.groups.filter(g=>g.curriculum==c);
+    groups.forEach(g => {
+      const pupils = DB.pupils.filter(p=>p.id_groups==g.id);
+      if(!pupils.length) return;
+      html += `<h3 style="margin:16px 0 8px;font-size:13px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em">
+        Група ${g.group_number} · ${c} курс · ${g.id_groups_type===2?'Денна':'Заочна'} (${pupils.length} ос.)
+      </h3>
+      <table style="margin-bottom:16px">
+        <thead><tr><th>#</th><th>ПІБ</th><th>Дата народження</th><th>РНОКПП</th><th>Телефон</th></tr></thead>
+        <tbody>`;
+      pupils.forEach((p,i) => {
+        const ind = DB.individuals.find(x=>x.id===p.id_individual);
+        if(!ind) return;
+        html += `<tr>
+          <td style="text-align:center">${i+1}</td>
+          <td style="font-weight:500">${fullName(ind)}</td>
+          <td>${fmt(ind.date_birth)}</td>
+          <td style="font-family:monospace">${ind.rnokpp||'—'}</td>
+          <td>${ind.phone_number||'—'}</td>
+        </tr>`;
+      });
+      html += '</tbody></table>';
+    });
+  });
+  html += '</div></div>';
+  return html;
 }
 
 </script>
