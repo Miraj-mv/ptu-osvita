@@ -1423,6 +1423,7 @@ tbody tr.clickable:hover td{background:#EEF2FF}
       <div class="nav-item" onclick="nav(this,'journal')"><span class="ni">📋</span>Журнал оцінок</div>
       <div class="nav-item" onclick="nav(this,'orders')"><span class="ni">📄</span>Накази</div>
       <div class="nav-item" onclick="nav(this,'dicts')"><span class="ni">📖</span>Довідники</div>
+      <div class="nav-item" onclick="nav(this,'users')"><span class="ni">👥</span>Користувачі</div>
     </nav>
     <div class="sb-footer">
       <div class="sb-year" id="sb-year"></div>
@@ -1575,6 +1576,16 @@ tbody tr.clickable:hover td{background:#EEF2FF}
         <div id="otab-cancelled" class="tab-content" style="padding:16px"><div id="orders-cancelled"></div></div>
       </div>
     </div>
+    <!-- КОРИСТУВАЧІ -->
+    <div class="page" id="p-users">
+      <div class="page-header">
+        <div class="page-title">👥 Користувачі системи</div>
+        <button class="btn btn-primary" onclick="openAddUser()">+ Додати користувача</button>
+      </div>
+      <div class="notif success" id="notif-users"></div>
+      <div class="card" id="users-table"></div>
+    </div>
+
     <!-- ДОВІДНИКИ -->
     <div class="page" id="p-dicts">
       <div class="page-header"><div class="page-title">📖 Довідники</div></div>
@@ -1854,6 +1865,34 @@ tbody tr.clickable:hover td{background:#EEF2FF}
 </div></div>
 
 <!-- ДОДАТКОВІ МОДАЛІ -->
+<!-- МОДАЛКА КОРИСТУВАЧА -->
+<div class="modal-overlay" id="modal-user"><div class="modal modal-sm">
+  <div class="modal-header">
+    <div class="modal-title" id="user-modal-title">Користувач</div>
+    <button class="modal-close" onclick="closeModal('user')">✕</button>
+  </div>
+  <div class="modal-body" style="display:flex;flex-direction:column;gap:12px">
+    <div class="form-group"><label>ПІБ (ініціали) *</label><input type="text" id="u-initials" placeholder="Іваненко І. І."></div>
+    <div class="form-group"><label>Логін *</label><input type="text" id="u-login" placeholder="ivan"></div>
+    <div class="form-group"><label>Пароль <span id="u-pass-hint" style="color:var(--muted);font-weight:400">(залиште порожнім щоб не змінювати)</span></label>
+      <input type="password" id="u-password" placeholder="Мінімум 6 символів">
+    </div>
+    <div class="form-group"><label>Роль</label>
+      <select id="u-role">
+        <option value="1">Адміністратор</option>
+        <option value="3">Секретар</option>
+      </select>
+    </div>
+  </div>
+  <div class="modal-footer">
+    <div id="u-error" style="font-size:12px;color:var(--danger)"></div>
+    <div style="display:flex;gap:8px">
+      <button class="btn" onclick="closeModal('user')">Скасувати</button>
+      <button class="btn btn-primary" id="u-save-btn" onclick="saveUser()">💾 Зберегти</button>
+    </div>
+  </div>
+</div></div>
+
 <div class="modal-overlay" id="modal-add-group"><div class="modal modal-sm">
   <div class="modal-header"><div class="modal-title">➕ Нова група</div><button class="modal-close" onclick="closeModal('add-group')">✕</button></div>
   <div class="modal-body"><div class="form-grid">
@@ -2047,6 +2086,7 @@ function renderPage(p){
   else if(p==='subjects')renderSubjects();
   else if(p==='teachers')renderTeachers();
   else if(p==='orders')renderOrders();
+  else if(p==='users'){loadUsers();}
   else if(p==='dicts'){renderDictMenu();document.getElementById('dict-content').innerHTML='<div class="empty-state">Оберіть довідник зліва</div>';document.getElementById('dict-add-btn').style.display='none';}
 }
 function openModal(id){document.getElementById('modal-'+id).classList.add('open');}
@@ -3404,6 +3444,224 @@ async function dictDeleteRow(id) {
   await del(currentDict.key, id);
   dictData = dictData.filter(r => r.id !== id);
   renderDictTable();
+}
+
+// ── КОРИСТУВАЧІ ────────────────────────────────────────────────────────────
+
+let usersData = []; // dic_users
+let teachersWithLogin = []; // teachers з логіном
+let rolesData = []; // roles
+let editingUserLogin = null; // login що редагується (для dic_users)
+let editingTeacherId = null; // id що редагується (для teachers)
+let editingUserType = null; // 'admin' або 'teacher'
+
+async function loadUsers(){
+  const [users, teachers, roles] = await Promise.all([
+    api('dic_users', '?select=login,initials,role_id&order=login'),
+    api('teachers', '?select=id,surname,name,middle_name,login&order=surname'),
+    api('roles', ''),
+  ]);
+  usersData = Array.isArray(users) ? users : [];
+  teachersWithLogin = Array.isArray(teachers) ? teachers.filter(t=>t.login) : [];
+  rolesData = Array.isArray(roles) ? roles : [];
+  renderUsers();
+}
+
+function getRoleName(roleId){
+  const roleMap = {1:'Адміністратор', 2:'Викладач', 3:'Секретар'};
+  return roleMap[roleId] || '—';
+}
+function getRoleBadge(roleId){
+  const cls = {1:'b-purple', 2:'b-green', 3:'b-amber'};
+  return `<span class="badge ${cls[roleId]||'b-gray'}">${getRoleName(roleId)}</span>`;
+}
+
+function renderUsers(){
+  const el = document.getElementById('users-table');
+  if(!el) return;
+
+  let html = `<table>
+    <thead><tr>
+      <th>ПІБ / Ім'я</th>
+      <th>Логін</th>
+      <th>Роль</th>
+      <th>Тип</th>
+      <th></th>
+    </tr></thead>
+    <tbody>`;
+
+  // Адміни та секретарі з dic_users
+  usersData.forEach(u => {
+    html += `<tr>
+      <td style="font-weight:500">${u.initials||'—'}</td>
+      <td><code style="background:#F5F5F5;padding:2px 7px;border-radius:5px;font-size:12px">${u.login}</code></td>
+      <td>${getRoleBadge(u.role_id)}</td>
+      <td><span class="badge b-blue" style="font-size:10px">Системний</span></td>
+      <td>
+        <div style="display:flex;gap:4px">
+          <button class="btn btn-sm" onclick="openEditUser('admin','${u.login}')">✏️</button>
+          <button class="btn btn-sm btn-danger" onclick="deleteUser('admin','${u.login}')">🗑</button>
+        </div>
+      </td>
+    </tr>`;
+  });
+
+  // Викладачі з логінами з таблиці teachers
+  teachersWithLogin.forEach(t => {
+    const name = `${t.surname||''} ${t.name||''}`.trim();
+    html += `<tr>
+      <td style="font-weight:500">${name}</td>
+      <td><code style="background:#F5F5F5;padding:2px 7px;border-radius:5px;font-size:12px">${t.login}</code></td>
+      <td>${getRoleBadge(2)}</td>
+      <td><span class="badge b-teal" style="font-size:10px">Викладач</span></td>
+      <td>
+        <div style="display:flex;gap:4px">
+          <button class="btn btn-sm" onclick="openEditUser('teacher',${t.id})">✏️</button>
+          <button class="btn btn-sm btn-danger" onclick="deleteUser('teacher',${t.id})">🗑</button>
+        </div>
+      </td>
+    </tr>`;
+  });
+
+  html += '</tbody></table>';
+  el.innerHTML = html;
+}
+
+function openAddUser(){
+  editingUserLogin = null;
+  editingTeacherId = null;
+  editingUserType = null;
+  document.getElementById('user-modal-title').textContent = '➕ Новий користувач';
+  document.getElementById('u-initials').value = '';
+  document.getElementById('u-login').value = '';
+  document.getElementById('u-password').value = '';
+  document.getElementById('u-role').value = '3';
+  document.getElementById('u-pass-hint').style.display = 'none';
+  document.getElementById('u-error').textContent = '';
+  // Показати роль викладача теж
+  document.getElementById('u-role').innerHTML = `
+    <option value="1">Адміністратор</option>
+    <option value="3">Секретар</option>
+  `;
+  openModal('user');
+}
+
+function openEditUser(type, id){
+  editingUserType = type;
+  document.getElementById('u-pass-hint').style.display = '';
+  document.getElementById('u-error').textContent = '';
+  document.getElementById('user-modal-title').textContent = '✏️ Редагувати користувача';
+
+  if(type === 'admin'){
+    editingUserLogin = id;
+    editingTeacherId = null;
+    const u = usersData.find(x => x.login === id);
+    document.getElementById('u-initials').value = u?.initials || '';
+    document.getElementById('u-login').value = u?.login || '';
+    document.getElementById('u-password').value = '';
+    document.getElementById('u-role').innerHTML = `
+      <option value="1" ${u?.role_id==1?'selected':''}>Адміністратор</option>
+      <option value="3" ${u?.role_id==3?'selected':''}>Секретар</option>
+    `;
+  } else {
+    editingTeacherId = id;
+    editingUserLogin = null;
+    const t = teachersWithLogin.find(x => x.id === id);
+    const name = `${t?.surname||''} ${t?.name||''} ${t?.middle_name||''}`.trim();
+    document.getElementById('u-initials').value = name;
+    document.getElementById('u-login').value = t?.login || '';
+    document.getElementById('u-password').value = '';
+    document.getElementById('u-role').innerHTML = `<option value="2" selected>Викладач</option>`;
+  }
+  openModal('user');
+}
+
+async function saveUser(){
+  const initials = document.getElementById('u-initials').value.trim();
+  const login = document.getElementById('u-login').value.trim();
+  const password = document.getElementById('u-password').value;
+  const roleId = parseInt(document.getElementById('u-role').value);
+  const errEl = document.getElementById('u-error');
+  const btn = document.getElementById('u-save-btn');
+
+  errEl.textContent = '';
+  if(!initials){ errEl.textContent = 'Введіть ПІБ'; return; }
+  if(!login){ errEl.textContent = 'Введіть логін'; return; }
+  if(!editingUserLogin && !editingTeacherId && (!password || password.length < 6)){
+    errEl.textContent = 'Пароль мінімум 6 символів'; return;
+  }
+  if(password && password.length > 0 && password.length < 6){
+    errEl.textContent = 'Пароль мінімум 6 символів'; return;
+  }
+
+  btn.disabled = true;
+  btn.textContent = 'Збереження...';
+
+  try {
+    const bc = getBcrypt();
+    let hashVal = null;
+    if(password && password.length >= 6){
+      hashVal = await bc.hash(password, 10);
+    }
+
+    if(editingUserType === 'teacher' && editingTeacherId){
+      // Оновлюємо викладача
+      const upd = { login };
+      if(hashVal) upd.password_hash = hashVal;
+      await patch('teachers', editingTeacherId, upd);
+      const t = teachersWithLogin.find(x => x.id === editingTeacherId);
+      if(t) t.login = login;
+      // Оновлюємо в DB.teachers теж
+      const dt = DB.teachers.find(x => x.id === editingTeacherId);
+      if(dt) dt.login = login;
+    } else if(editingUserLogin){
+      // Оновлюємо dic_users — PATCH по login
+      const upd = { initials, role_id: roleId };
+      if(hashVal) upd.password_hash = hashVal;
+      await fetch(`${SB}/rest/v1/dic_users?login=eq.${encodeURIComponent(editingUserLogin)}`, {
+        method: 'PATCH', headers: H, body: JSON.stringify(upd)
+      });
+      const u = usersData.find(x => x.login === editingUserLogin);
+      if(u){ u.initials = initials; u.role_id = roleId; }
+    } else {
+      // Новий користувач — тільки admin або secretary в dic_users
+      const newUser = { login, initials, role_id: roleId, password_hash: hashVal };
+      const res = await post('dic_users', newUser);
+      if(Array.isArray(res) && res[0]){
+        usersData.push(res[0]);
+      } else {
+        errEl.textContent = 'Помилка збереження. Можливо логін вже існує.';
+        return;
+      }
+    }
+
+    closeModal('user');
+    renderUsers();
+    notif('notif-users', `✅ Користувача збережено`);
+  } catch(e){
+    errEl.textContent = 'Помилка: ' + e.message;
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '💾 Зберегти';
+  }
+}
+
+async function deleteUser(type, id){
+  if(!confirm('Видалити користувача? Він більше не зможе увійти в систему.')) return;
+  if(type === 'admin'){
+    await fetch(`${SB}/rest/v1/dic_users?login=eq.${encodeURIComponent(id)}`, {
+      method: 'DELETE', headers: H
+    });
+    usersData = usersData.filter(u => u.login !== id);
+  } else {
+    // Для викладача — просто видаляємо логін і пароль
+    await patch('teachers', id, { login: null, password_hash: null });
+    teachersWithLogin = teachersWithLogin.filter(t => t.id !== id);
+    const dt = DB.teachers.find(x => x.id === id);
+    if(dt){ dt.login = null; }
+  }
+  renderUsers();
+  notif('notif-users', '✅ Користувача видалено');
 }
 
 </script>
