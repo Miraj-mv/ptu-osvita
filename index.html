@@ -2241,7 +2241,11 @@ function renderDashboard(){
   document.getElementById('s-groups').textContent=DB.groups.length;
   document.getElementById('s-subjects').textContent=DB.subjects.length;
   const bc={};DB.groups.forEach(g=>{bc[g.curriculum]=(bc[g.curriculum]||0)+1;});
-  document.getElementById('dash-groups').innerHTML=[1,2,3,4].filter(c=>bc[c]).map(c=>{const{bg,color}=cc(c);return`<div class="info-row"><span class="info-label">${c} курс</span><span class="badge" style="background:${bg};color:${color}">${bc[c]} груп</span></div>`;}).join('')||'<div class="empty-state">Немає даних</div>';
+  document.getElementById('dash-groups').innerHTML=[1,2,3,4].filter(c=>bc[c]).map(c=>{
+    const{bg,color}=cc(c);
+    const pupilsCnt=DB.groups.filter(g=>g.curriculum==c).reduce((s,g)=>s+DB.pupils.filter(p=>p.id_groups==g.id).length,0);
+    return`<div class="info-row"><span class="info-label">${c} курс</span><div style="display:flex;align-items:center;gap:6px"><span class="badge" style="background:${bg};color:${color}">${bc[c]} груп</span><span class="badge b-gray" style="font-size:10px">${pupilsCnt} здобув.</span></div></div>`;
+  }).join('')||'<div class="empty-state">Немає даних</div>';
   document.getElementById('dash-years').innerHTML=DB.years.slice(-5).reverse().map(y=>`<div class="info-row"><span class="info-label">${fmt(y.date_start)}</span><div style="display:flex;align-items:center;gap:6px"><span style="font-size:12px">${fmt(y.date_end)}</span>${y.active?'<span class="badge b-green">Активний</span>':''}</div></div>`).join('')||'—';
   renderDashGroupsTable();
 }
