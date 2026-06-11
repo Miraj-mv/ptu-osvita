@@ -1948,6 +1948,20 @@ tbody tr.clickable:hover td{background:#EEF2FF}
   </div>
 </div></div>
 
+<div class="modal-overlay" id="modal-edit-group"><div class="modal modal-sm">
+  <div class="modal-header"><div class="modal-title">✏️ Редагувати групу</div><button class="modal-close" onclick="closeModal('edit-group')">✕</button></div>
+  <div class="modal-body"><div class="form-grid">
+    <div class="form-group"><label>Номер *</label><input type="text" id="eg-num"></div>
+    <div class="form-group"><label>Назва</label><input type="text" id="eg-name"></div>
+    <div class="form-group"><label>Курс</label><select id="eg-cur"><option value="1">1 курс</option><option value="2">2 курс</option><option value="3">3 курс</option><option value="4">4 курс</option></select></div>
+    <div class="form-group"><label>Форма</label><select id="eg-type"><option value="2">Денна</option><option value="3">Заочна</option></select></div>
+  </div></div>
+  <div class="modal-footer"><div></div><div style="display:flex;gap:8px">
+    <button class="btn" onclick="closeModal('edit-group')">Скасувати</button>
+    <button class="btn btn-primary" onclick="updateGroup()">💾 Зберегти</button>
+  </div></div>
+</div></div>
+
 <div class="modal-overlay" id="modal-add-group"><div class="modal modal-sm">
   <div class="modal-header"><div class="modal-title">➕ Нова група</div><button class="modal-close" onclick="closeModal('add-group')">✕</button></div>
   <div class="modal-body"><div class="form-grid">
@@ -3047,7 +3061,38 @@ async function cancelOrder(orderId,orderType,persons){
 
 // ── GROUPS / SUBJECTS / TEACHERS ──
 function renderGroups(){
-  document.getElementById('groups-tbl').innerHTML=`<table><thead><tr><th>Номер</th><th>Курс</th><th>Форма</th><th>Здобувачів</th><th></th></tr></thead><tbody>${DB.groups.map(g=>{const c=cc(g.curriculum);const isDen=g.id_groups_type===2;const cnt=DB.pupils.filter(p=>p.id_groups==g.id).length;return`<tr><td style="font-weight:600">Група ${g.group_number}</td><td><span class="badge" style="background:${c.bg};color:${c.color}">${g.curriculum} курс</span></td><td><span class="badge ${isDen?'b-green':'b-amber'}">${isDen?'Денна':'Заочна'}</span></td><td>${cnt}</td><td><button class="btn btn-sm btn-danger" onclick="deleteItem('groups',${g.id},'groups')">🗑</button></td></tr>`;}).join('')}</tbody></table>`;
+  document.getElementById('groups-tbl').innerHTML=`<table><thead><tr><th>Номер</th><th>Курс</th><th>Форма</th><th>Здобувачів</th><th></th></tr></thead><tbody>${DB.groups.map(g=>{const c=cc(g.curriculum);const isDen=g.id_groups_type===2;const cnt=DB.pupils.filter(p=>p.id_groups==g.id).length;return`<tr><td style="font-weight:600">Група ${g.group_number}</td><td><span class="badge" style="background:${c.bg};color:${c.color}">${g.curriculum} курс</span></td><td><span class="badge ${isDen?'b-green':'b-amber'}">${isDen?'Денна':'Заочна'}</span></td><td>${cnt}</td><td><div style="display:flex;gap:4px"><button class="btn btn-sm" onclick="openEditGroup(${g.id})">✏️</button><button class="btn btn-sm btn-danger" onclick="deleteItem('groups',${g.id},'groups')">🗑</button></div></td></tr>`;}).join('')}</tbody></table>`;
+}
+
+let editingGroupId = null;
+
+function openEditGroup(id){
+  const g = DB.groups.find(x=>x.id===id);
+  if(!g) return;
+  editingGroupId = id;
+  document.getElementById('eg-num').value = g.group_number||'';
+  document.getElementById('eg-name').value = g.name||'';
+  document.getElementById('eg-cur').value = g.curriculum||1;
+  document.getElementById('eg-type').value = g.id_groups_type||2;
+  openModal('edit-group');
+}
+
+async function updateGroup(){
+  if(!editingGroupId) return;
+  const num = document.getElementById('eg-num').value.trim();
+  if(!num) return alert('Введіть номер групи');
+  const data = {
+    group_number: num,
+    name: document.getElementById('eg-name').value.trim(),
+    curriculum: parseInt(document.getElementById('eg-cur').value),
+    id_groups_type: parseInt(document.getElementById('eg-type').value),
+  };
+  await patch('groups', editingGroupId, data);
+  const idx = DB.groups.findIndex(g=>g.id===editingGroupId);
+  if(idx>=0) Object.assign(DB.groups[idx], data);
+  closeModal('edit-group');
+  renderGroups();
+  populateSelects();
 }
 function renderSubjects(){
   const tc={1:'b-gray',2:'b-blue',3:'b-purple',4:'b-green',5:'b-amber',6:'b-teal'};
