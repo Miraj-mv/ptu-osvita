@@ -1954,7 +1954,7 @@ tbody tr.clickable:hover td{background:#EEF2FF}
     <div class="form-group"><label>Номер *</label><input type="text" id="eg-num"></div>
     <div class="form-group"><label>Назва</label><input type="text" id="eg-name"></div>
     <div class="form-group"><label>Курс</label><select id="eg-cur"><option value="1">1 курс</option><option value="2">2 курс</option><option value="3">3 курс</option><option value="4">4 курс</option></select></div>
-    <div class="form-group"><label>Форма</label><select id="eg-type"><option value="2">Денна</option><option value="3">Заочна</option></select></div>
+    <div class="form-group"><label>Тип групи</label><select id="eg-type"></select></div>
   </div></div>
   <div class="modal-footer"><div></div><div style="display:flex;gap:8px">
     <button class="btn" onclick="closeModal('edit-group')">Скасувати</button>
@@ -1968,7 +1968,7 @@ tbody tr.clickable:hover td{background:#EEF2FF}
     <div class="form-group"><label>Номер *</label><input type="text" id="ng-num"></div>
     <div class="form-group"><label>Назва</label><input type="text" id="ng-name"></div>
     <div class="form-group"><label>Курс</label><select id="ng-cur"><option value="1">1 курс</option><option value="2">2 курс</option><option value="3">3 курс</option><option value="4">4 курс</option></select></div>
-    <div class="form-group"><label>Форма</label><select id="ng-type"><option value="2">Денна</option><option value="3">Заочна</option></select></div>
+    <div class="form-group"><label>Тип групи</label><select id="ng-type"></select></div>
   </div></div>
   <div class="modal-footer"><div></div><div style="display:flex;gap:8px"><button class="btn" onclick="closeModal('add-group')">Скасувати</button><button class="btn btn-primary" onclick="saveGroup()">✓ Зберегти</button></div></div>
 </div></div>
@@ -2019,7 +2019,7 @@ const ORDER_TYPES={1:'📥 Зарахування',2:'📤 Відрахуван�
 const ORDER_STATES={1:{lbl:'Чорновик',cls:'b-gray'},2:{lbl:'Активний',cls:'b-green'},3:{lbl:'Відмінений',cls:'b-red'}};
 
 let session=null;
-let DB={individuals:[],groups:[],subjects:[],teachers:[],years:[],subjectTypes:[],pupils:[],orders:[],orderIndividuals:[],nationalities:[],cities:[],docTypes:[],relTypes:[]};
+let DB={individuals:[],groups:[],subjects:[],teachers:[],years:[],subjectTypes:[],pupils:[],orders:[],orderIndividuals:[],nationalities:[],cities:[],docTypes:[],relTypes:[],groupTypes:[]};
 let grades={};
 let gradeTarget=null;
 let currentIndId=null;
@@ -2084,7 +2084,7 @@ async function startApp(){
 }
 
 async function loadAll(){
-  const [individuals,groups,subjects,teachers,years,subjectTypes,pupils,orders,orderInds,nationalities,cities,docTypes,relTypes]=await Promise.all([
+  const [individuals,groups,subjects,teachers,years,subjectTypes,pupils,orders,orderInds,nationalities,cities,docTypes,relTypes,groupTypes]=await Promise.all([
     api('individual','?select=id,surname,name,middle_name,date_birth,rnokpp,phone_number,id_group_planning,editor_login,edit_time,create_time&order=surname'),
     api('groups','?order=id'),
     api('subjects','?order=subjects_title'),
@@ -2098,6 +2098,7 @@ async function loadAll(){
     api('dic_city','?order=id'),
     api('dic_doctype',''),
     api('dic_relatives',''),
+    api('dic_groups_type','?order=id'),
   ]);
   DB.individuals=Array.isArray(individuals)?individuals:[];
   DB.groups=Array.isArray(groups)?groups:[];
@@ -2112,6 +2113,7 @@ async function loadAll(){
   DB.cities=Array.isArray(cities)?cities:[];
   DB.docTypes=Array.isArray(docTypes)?docTypes:[];
   DB.relTypes=Array.isArray(relTypes)?relTypes:[];
+  DB.groupTypes=Array.isArray(groupTypes)?groupTypes:[];
   renderDashboard();
   populateSelects();
 }
@@ -2133,6 +2135,11 @@ function populateSelects(){
   if(nt)nt.innerHTML=DB.subjectTypes.map(t=>`<option value="${t.id}">${t.type_name}</option>`).join('');
   const nat=document.getElementById('ind-nationality');
   if(nat)nat.innerHTML='<option value="">—</option>'+DB.nationalities.map(n=>`<option value="${n.id}">${n.nationality}</option>`).join('');
+  // Типи груп з довідника
+  ['ng-type','eg-type'].forEach(id=>{
+    const el=document.getElementById(id);if(!el)return;
+    el.innerHTML=DB.groupTypes.map(t=>`<option value="${t.id}">${t.groups_type}</option>`).join('');
+  });
   const igp=document.getElementById('ind-group-plan');
   if(igp)igp.innerHTML='<option value="">— Оберіть —</option>'+DB.groups.filter(g=>g.curriculum===1||g.curriculum==='1').map(g=>`<option value="${g.id}">Група ${g.group_number}</option>`).join('');
   const pgrp=document.getElementById('picker-group');
@@ -2180,6 +2187,21 @@ function switchOrderTab(el,id){
 }
 
 // ── HELPERS ──
+function getGroupTypeName(typeId, short=true){
+  const t = DB.groupTypes.find(x=>x.id===typeId||x.id==typeId);
+  if(!t) return '—';
+  if(short){
+    // Скорочена назва
+    if(String(typeId)==='2') return 'Баз. серед.';
+    if(String(typeId)==='3') return 'Повна серед.';
+    return t.groups_type.substring(0,20)+'…';
+  }
+  return t.groups_type;
+}
+function getGroupTypeBadge(typeId){
+  const cls = String(typeId)==='2' ? 'b-blue' : 'b-purple';
+  return `<span class="badge ${cls}" style="font-size:10px" title="${getGroupTypeName(typeId,false)}">${getGroupTypeName(typeId,true)}</span>`;
+}
 function fmt(d){if(!d)return'—';return new Date(d).toLocaleDateString('uk-UA');}
 function fmtDT(d){if(!d)return'—';return new Date(d).toLocaleString('uk-UA',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'});}
 function ini(s,n){return((s||'')[0]||'')+((n||'')[0]||'');}
@@ -3061,7 +3083,7 @@ async function cancelOrder(orderId,orderType,persons){
 
 // ── GROUPS / SUBJECTS / TEACHERS ──
 function renderGroups(){
-  document.getElementById('groups-tbl').innerHTML=`<table><thead><tr><th>Номер</th><th>Курс</th><th>Форма</th><th>Здобувачів</th><th></th></tr></thead><tbody>${DB.groups.map(g=>{const c=cc(g.curriculum);const isDen=g.id_groups_type===2;const cnt=DB.pupils.filter(p=>p.id_groups==g.id).length;return`<tr><td style="font-weight:600">Група ${g.group_number}</td><td><span class="badge" style="background:${c.bg};color:${c.color}">${g.curriculum} курс</span></td><td><span class="badge ${isDen?'b-green':'b-amber'}">${isDen?'Денна':'Заочна'}</span></td><td>${cnt}</td><td><div style="display:flex;gap:4px"><button class="btn btn-sm" onclick="openEditGroup(${g.id})">✏️</button><button class="btn btn-sm btn-danger" onclick="deleteItem('groups',${g.id},'groups')">🗑</button></div></td></tr>`;}).join('')}</tbody></table>`;
+  document.getElementById('groups-tbl').innerHTML=`<table><thead><tr><th>Номер</th><th>Курс</th><th>Тип групи</th><th>Здобувачів</th><th></th></tr></thead><tbody>${DB.groups.map(g=>{const c=cc(g.curriculum);const cnt=DB.pupils.filter(p=>p.id_groups==g.id).length;return`<tr><td style="font-weight:600">Група ${g.group_number}</td><td><span class="badge" style="background:${c.bg};color:${c.color}">${g.curriculum} курс</span></td><td>${getGroupTypeBadge(g.id_groups_type)}</td><td>${cnt}</td><td><div style="display:flex;gap:4px"><button class="btn btn-sm" onclick="openEditGroup(${g.id})">✏️</button><button class="btn btn-sm btn-danger" onclick="deleteItem('groups',${g.id},'groups')">🗑</button></div></td></tr>`;}).join('')}</tbody></table>`;
 }
 
 let editingGroupId = null;
@@ -3798,14 +3820,13 @@ function renderDashGroupsTable(){
     const {bg, color} = courseColors[c] || courseColors[1];
 
     groups.forEach((g, idx) => {
-      const isDen = g.id_groups_type === 2;
-      const maxStudents = isDen ? 30 : 25;
+      const maxStudents = 30;
       const pct = Math.round(g.cnt / maxStudents * 100);
       const barColor = pct >= 90 ? '#16A34A' : pct >= 60 ? '#D97706' : '#DC2626';
       html += `<tr>
         ${idx === 0 ? `<td rowspan="${groups.length}" style="background:${bg};color:${color};font-weight:700;text-align:center;border-right:2px solid ${color}33">${c} курс<br><span style="font-size:11px;font-weight:400">${courseTotal} ос.</span></td>` : ''}
         <td style="font-weight:600">Група ${g.group_number}</td>
-        <td><span class="badge ${isDen?'b-green':'b-amber'}">${isDen?'Денна':'Заочна'}</span></td>
+        <td>${getGroupTypeBadge(g.id_groups_type)}</td>
         <td style="text-align:center;font-weight:700;font-size:15px">${g.cnt}</td>
         <td style="min-width:140px">
           <div style="display:flex;align-items:center;gap:8px">
@@ -3894,11 +3915,10 @@ function reportGroupsSummary(date){
     groups.forEach(g => {
       const cnt = DB.pupils.filter(p=>p.id_groups==g.id).length;
       total += cnt;
-      const isDen = g.id_groups_type===2;
       rows += `<tr>
         <td style="background:${courseColors[c]};font-weight:600;text-align:center">${c}</td>
         <td style="font-weight:600">Група ${g.group_number}</td>
-        <td>${isDen?'Денна':'Заочна'}</td>
+        <td>${getGroupTypeName(g.id_groups_type,true)}</td>
         <td style="text-align:center;font-weight:700">${cnt}</td>
       </tr>`;
     });
@@ -4012,7 +4032,7 @@ function reportGroupByGroup(date){
       const pupils = DB.pupils.filter(p=>p.id_groups==g.id);
       if(!pupils.length) return;
       html += `<h3 style="margin:16px 0 8px;font-size:13px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em">
-        Група ${g.group_number} · ${c} курс · ${g.id_groups_type===2?'Денна':'Заочна'} (${pupils.length} ос.)
+        Група ${g.group_number} · ${c} курс · ${getGroupTypeName(g.id_groups_type,true)} (${pupils.length} ос.)
       </h3>
       <table style="margin-bottom:16px">
         <thead><tr><th>#</th><th>ПІБ</th><th>Дата народження</th><th>РНОКПП</th><th>Телефон</th></tr></thead>
