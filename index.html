@@ -1415,16 +1415,17 @@ tbody tr.clickable:hover td{background:#EEF2FF}
     </div>
     <nav class="sb-nav">
       <div class="nav-item active" onclick="nav(this,'dashboard')"><span class="ni">📊</span>Дашборд</div>
-      <div class="nav-item" onclick="nav(this,'individuals')"><span class="ni">🧑</span>Фізичні особи</div>
-      <div class="nav-item" onclick="nav(this,'students')"><span class="ni">🎓</span>Здобувачі освіти</div>
-      <div class="nav-item" onclick="nav(this,'groups')"><span class="ni">🏫</span>Групи</div>
-      <div class="nav-item" onclick="nav(this,'subjects')"><span class="ni">📚</span>Предмети</div>
-      <div class="nav-item" onclick="nav(this,'teachers')"><span class="ni">👩‍🏫</span>Викладачі</div>
-      <div class="nav-item" onclick="nav(this,'journal')"><span class="ni">📋</span>Журнал оцінок</div>
-      <div class="nav-item" onclick="nav(this,'orders')"><span class="ni">📄</span>Накази</div>
-      <div class="nav-item" onclick="nav(this,'dicts')"><span class="ni">📖</span>Довідники</div>
-      <div class="nav-item" onclick="nav(this,'users')"><span class="ni">👥</span>Користувачі</div>
-      <div class="nav-item" onclick="nav(this,'reports')"><span class="ni">📊</span>Звіти</div>
+      <div class="nav-item" data-section="individuals" onclick="nav(this,'individuals')"><span class="ni">🧑</span>Фізичні особи</div>
+      <div class="nav-item" data-section="students" onclick="nav(this,'students')"><span class="ni">🎓</span>Здобувачі освіти</div>
+      <div class="nav-item" data-section="groups" onclick="nav(this,'groups')"><span class="ni">🏫</span>Групи</div>
+      <div class="nav-item" data-section="subjects" onclick="nav(this,'subjects')"><span class="ni">📚</span>Предмети</div>
+      <div class="nav-item" data-section="teachers" onclick="nav(this,'teachers')"><span class="ni">👩‍🏫</span>Викладачі</div>
+      <div class="nav-item" data-section="journal" onclick="nav(this,'journal')"><span class="ni">📋</span>Журнал оцінок</div>
+      <div class="nav-item" data-section="orders" onclick="nav(this,'orders')"><span class="ni">📄</span>Накази</div>
+      <div class="nav-item" data-section="dicts" onclick="nav(this,'dicts')"><span class="ni">📖</span>Довідники</div>
+      <div class="nav-item" data-section="users" onclick="nav(this,'users')"><span class="ni">👥</span>Користувачі</div>
+      <div class="nav-item" data-section="permissions" onclick="nav(this,'permissions')"><span class="ni">🔐</span>Доступи</div>
+      <div class="nav-item" data-section="reports" onclick="nav(this,'reports')"><span class="ni">📊</span>Звіти</div>
     </nav>
     <div class="sb-footer">
       <div class="sb-year" id="sb-year"></div>
@@ -1629,6 +1630,21 @@ tbody tr.clickable:hover td{background:#EEF2FF}
         </div>
       </div>
       <div id="report-output"></div>
+    </div>
+
+    <!-- РОЗМЕЖУВАННЯ ДОСТУПУ -->
+    <div class="page" id="p-permissions">
+      <div class="page-header"><div class="page-title">🔐 Розмежування доступу</div></div>
+      <div class="notif success" id="notif-perm"></div>
+      <div class="card">
+        <div class="card-header">Налаштування доступу за ролями</div>
+        <div style="padding:14px;font-size:12px;color:var(--muted)">
+          <span class="badge b-gray" style="font-size:10px">❌ Немає</span> — розділ не показується ·
+          <span class="badge b-amber" style="font-size:10px">👁 Перегляд</span> — видно, без кнопок додавання/редагування/видалення ·
+          <span class="badge b-green" style="font-size:10px">✅ Повний</span> — повний доступ
+        </div>
+        <div class="tbl-wrap" id="permissions-table"></div>
+      </div>
     </div>
 
     <!-- КОРИСТУВАЧІ -->
@@ -2080,6 +2096,8 @@ async function startApp(){
   document.getElementById('sb-name').textContent=session.name;
   document.getElementById('sb-role').innerHTML=`<span class="badge ${RBADGE[session.role]||'b-gray'}" style="font-size:10px">${ROLES[session.role]||session.role}</span>`;
   document.getElementById('dash-date').textContent=new Date().toLocaleDateString('uk-UA',{day:'numeric',month:'long',year:'numeric'});
+  await loadPermissions();
+  applyPermissions();
   await loadAll();
 }
 
@@ -2164,6 +2182,7 @@ function renderPage(p){
   else if(p==='orders')renderOrders();
   else if(p==='users'){loadUsers();}
   else if(p==='reports'){document.getElementById('report-output').innerHTML='';}
+  else if(p==='permissions'){loadPermissions();}
   else if(p==='dicts'){renderDictMenu();document.getElementById('dict-content').innerHTML='<div class="empty-state">Оберіть довідник зліва</div>';document.getElementById('dict-add-btn').style.display='none';}
 }
 function openModal(id){document.getElementById('modal-'+id).classList.add('open');}
@@ -4058,6 +4077,211 @@ function reportGroupByGroup(date){
   html += '</div></div>';
   return html;
 }
+
+// ── РОЗМЕЖУВАННЯ ДОСТУПУ ─────────────────────────────────────────────────────
+
+let permissionsData = []; // role_permissions
+const PERM_SECTIONS = [
+  {key:'dashboard',   label:'📊 Дашборд'},
+  {key:'individuals', label:'🧑 Фізичні особи'},
+  {key:'students',    label:'🎓 Здобувачі освіти'},
+  {key:'groups',      label:'🏫 Групи'},
+  {key:'subjects',    label:'📚 Предмети'},
+  {key:'teachers',    label:'👩‍🏫 Викладачі'},
+  {key:'journal',     label:'📋 Журнал оцінок'},
+  {key:'orders',      label:'📄 Накази'},
+  {key:'reports',     label:'📊 Звіти'},
+  {key:'dicts',       label:'📖 Довідники'},
+  {key:'users',       label:'👥 Користувачі'},
+  {key:'permissions', label:'🔐 Доступи'},
+];
+const PERM_ROLES = [
+  {id:1, label:'Адміністратор', color:'#534AB7'},
+  {id:3, label:'Секретар',      color:'#854F0B'},
+  {id:2, label:'Викладач',      color:'#0F6E56'},
+];
+const ACCESS_LEVELS = [
+  {val:0, label:'❌ Немає',    cls:'b-gray'},
+  {val:1, label:'👁 Перегляд', cls:'b-amber'},
+  {val:2, label:'✅ Повний',   cls:'b-green'},
+];
+
+async function loadPermissions(){
+  const data = await api('role_permissions','');
+  permissionsData = Array.isArray(data) ? data : [];
+  renderPermissionsTable();
+}
+
+function getPermission(roleId, section){
+  const p = permissionsData.find(x=>x.role_id===roleId && x.section===section);
+  return p ? p.access_level : 0;
+}
+
+function renderPermissionsTable(){
+  const el = document.getElementById('permissions-table');
+  if(!el) return;
+
+  let html = `<table><thead><tr>
+    <th>Розділ</th>
+    ${PERM_ROLES.map(r=>`<th style="text-align:center;color:${r.color}">${r.label}</th>`).join('')}
+  </tr></thead><tbody>`;
+
+  PERM_SECTIONS.forEach(sec => {
+    // permissions і dashboard завжди фіксовані — не редагуються
+    const locked = sec.key==='permissions' || sec.key==='dashboard';
+    html += `<tr>
+      <td style="font-weight:500">${sec.label}</td>
+      ${PERM_ROLES.map(r=>{
+        if(locked){
+          const lvl = sec.key==='permissions' ? (r.id===1?2:0) : 2;
+          const a = ACCESS_LEVELS.find(x=>x.val===lvl);
+          return `<td style="text-align:center"><span class="badge ${a.cls}" style="font-size:11px">${a.label}</span></td>`;
+        }
+        const lvl = getPermission(r.id, sec.key);
+        return `<td style="text-align:center">
+          <select onchange="updatePermission(${r.id},'${sec.key}',+this.value)"
+            style="padding:4px 8px;font-size:12px;border:1px solid var(--border);border-radius:6px;font-family:var(--font);outline:none;cursor:pointer">
+            ${ACCESS_LEVELS.map(a=>`<option value="${a.val}" ${a.val===lvl?'selected':''}>${a.label}</option>`).join('')}
+          </select>
+        </td>`;
+      }).join('')}
+    </tr>`;
+  });
+
+  html += '</tbody></table>';
+  el.innerHTML = html;
+}
+
+async function updatePermission(roleId, section, level){
+  const existing = permissionsData.find(x=>x.role_id===roleId && x.section===section);
+  if(existing){
+    await patch('role_permissions', existing.id, {access_level: level});
+    existing.access_level = level;
+  } else {
+    const res = await post('role_permissions', {role_id:roleId, section, access_level:level});
+    if(Array.isArray(res)&&res[0]) permissionsData.push(res[0]);
+  }
+  notif('notif-perm', '✅ Доступ оновлено');
+  // Якщо це поточний користувач — оновити інтерфейс
+  applyPermissions();
+}
+
+// ── ЗАСТОСУВАННЯ ПРАВ ДОСТУПУ ───────────────────────────────────────────────
+
+function getMyRoleId(){
+  const map = {admin:1, teacher:2, secretary:3};
+  return map[session?.role] || 0;
+}
+
+function getMyAccess(section){
+  // Адмін завжди повний доступ
+  if(session?.role==='admin') return 2;
+  return getPermission(getMyRoleId(), section);
+}
+
+function applyPermissions(){
+  if(!session) return;
+  const myRole = getMyRoleId();
+
+  // Сторінка permissions — лише admin
+  const permNav = document.querySelector('.nav-item[data-section="permissions"]');
+  if(permNav) permNav.style.display = session.role==='admin' ? '' : 'none';
+
+  // Решта пунктів меню
+  document.querySelectorAll('.nav-item[data-section]').forEach(item=>{
+    const section = item.dataset.section;
+    if(section==='permissions') return;
+    const lvl = getMyAccess(section);
+    item.style.display = lvl>0 ? '' : 'none';
+  });
+
+  // Якщо поточна сторінка стала недоступною — переходимо на дашборд
+  const activePage = document.querySelector('.page.active');
+  if(activePage){
+    const pageId = activePage.id.replace('p-','');
+    if(pageId!=='dashboard' && pageId!=='permissions' && getMyAccess(pageId)===0){
+      const dashNav = document.querySelector('.nav-item[data-section="dashboard"]');
+      if(dashNav) dashNav.click();
+    } else if(pageId==='permissions' && session.role!=='admin'){
+      const dashNav = document.querySelector('.nav-item[data-section="dashboard"]');
+      if(dashNav) dashNav.click();
+    }
+  }
+
+  // Застосовуємо обмеження "тільки перегляд" — приховуємо кнопки дій
+  applyViewOnlyRestrictions();
+}
+
+function applyViewOnlyRestrictions(){
+  // Для кожної сторінки перевіряємо рівень доступу і ховаємо керуючі елементи
+  const sections = ['individuals','students','groups','subjects','teachers','journal','orders','dicts','users'];
+  sections.forEach(sec=>{
+    const lvl = getMyAccess(sec);
+    const isViewOnly = lvl===1;
+    const page = document.getElementById('p-'+sec);
+    if(!page) return;
+    // Кнопки додавання у заголовку сторінки
+    page.querySelectorAll('.page-header .btn-primary').forEach(b=>{
+      b.style.display = isViewOnly ? 'none' : '';
+    });
+  });
+}
+
+// Перевизначаємо renderStudents/renderGroups/... щоб приховувати кнопки 🗑/✏️ при перегляді
+const _origRenderIndividuals = renderIndividuals;
+renderIndividuals = function(){
+  _origRenderIndividuals();
+  if(getMyAccess('individuals')===1){
+    document.querySelectorAll('#individuals-tbl .btn-danger').forEach(b=>b.style.display='none');
+  }
+};
+
+const _origRenderGroups = renderGroups;
+renderGroups = function(){
+  _origRenderGroups();
+  if(getMyAccess('groups')===1){
+    document.querySelectorAll('#groups-tbl .btn-sm').forEach(b=>b.style.display='none');
+  }
+};
+
+const _origRenderSubjects = renderSubjects;
+renderSubjects = function(){
+  _origRenderSubjects();
+  if(getMyAccess('subjects')===1){
+    document.querySelectorAll('#subjects-tbl .btn-danger').forEach(b=>b.style.display='none');
+  }
+};
+
+const _origRenderTeachers = renderTeachers;
+renderTeachers = function(){
+  _origRenderTeachers();
+  if(getMyAccess('teachers')===1){
+    document.querySelectorAll('#teachers-tbl .btn-danger').forEach(b=>b.style.display='none');
+  }
+};
+
+const _origRenderAllStudentTabs = renderAllStudentTabs;
+renderAllStudentTabs = function(){
+  _origRenderAllStudentTabs();
+  // students view-only — нема дій в таблицях здобувачів за замовчуванням, нічого ховати
+};
+
+const _origRenderOrders = renderOrders;
+renderOrders = function(){
+  _origRenderOrders();
+  if(getMyAccess('orders')===1){
+    // приховати кнопку "Новий наказ" — вже робиться через applyViewOnlyRestrictions
+    // картки наказів залишаються клікабельні для перегляду
+  }
+};
+
+const _origRenderUsers = renderUsers;
+renderUsers = function(){
+  _origRenderUsers();
+  if(getMyAccess('users')===1){
+    document.querySelectorAll('#users-table .btn').forEach(b=>b.style.display='none');
+  }
+};
 
 </script>
 </body>
