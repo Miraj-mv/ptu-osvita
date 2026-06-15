@@ -1879,6 +1879,7 @@ tbody tr.clickable:hover td{background:#EEF2FF}
           <option value="1">📥 Зарахування</option>
           <option value="2">📤 Відрахування</option>
           <option value="3">🏆 Випуск (закінчення навчання)</option>
+          <option value="4">🔄 Переведення на інший курс</option>
         </select>
       </div>
       <div class="form-group"><label>Статус</label>
@@ -1890,6 +1891,14 @@ tbody tr.clickable:hover td{background:#EEF2FF}
       </div>
     </div>
     <div style="border-top:1px solid var(--border);padding-top:16px">
+      <!-- Блок нової групи для переведення -->
+      <div id="transfer-group-block" style="display:none;align-items:center;gap:10px;padding:10px 14px;background:#EEF2FF;border-radius:8px;margin-bottom:12px;border:1px solid #C7D2FE">
+        <span style="font-size:13px;font-weight:600;color:#4F46E5">🔄 Перевести до групи:</span>
+        <select id="transfer-target-group" style="padding:7px 10px;font-size:13px;border:1px solid #C7D2FE;border-radius:8px;font-family:var(--font);outline:none;cursor:pointer;flex:1">
+          <option value="">— Оберіть нову групу —</option>
+        </select>
+        <div style="font-size:11px;color:#534AB7">При активації наказу здобувачі будуть переведені до обраної групи</div>
+      </div>
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;flex-wrap:wrap;gap:8px">
         <div style="font-size:13px;font-weight:600" id="ord-persons-title">Особи в наказі</div>
         <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
@@ -2031,7 +2040,7 @@ const KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6
 const H={'apikey':KEY,'Authorization':'Bearer '+KEY,'Content-Type':'application/json'};
 const ROLES={admin:'Адміністратор',teacher:'Викладач',secretary:'Секретар'};
 const RBADGE={admin:'b-purple',teacher:'b-green',secretary:'b-amber'};
-const ORDER_TYPES={1:'📥 Зарахування',2:'📤 Відрахування',3:'🏆 Випуск'};
+const ORDER_TYPES={1:'📥 Зарахування',2:'📤 Відрахування',3:'🏆 Випуск',4:'🔄 Переведення'};
 const ORDER_STATES={1:{lbl:'Чорновик',cls:'b-gray'},2:{lbl:'Активний',cls:'b-green'},3:{lbl:'Відмінений',cls:'b-red'}};
 
 let session=null;
@@ -2158,6 +2167,8 @@ function populateSelects(){
     const el=document.getElementById(id);if(!el)return;
     el.innerHTML=DB.groupTypes.map(t=>`<option value="${t.id}">${t.groups_type}</option>`).join('');
   });
+  const ttg=document.getElementById('transfer-target-group');
+  if(ttg)ttg.innerHTML='<option value="">— Оберіть нову групу —</option>'+DB.groups.map(g=>`<option value="${g.id}">Група ${g.group_number} (${g.curriculum} курс)</option>`).join('');
   const igp=document.getElementById('ind-group-plan');
   if(igp)igp.innerHTML='<option value="">— Оберіть —</option>'+DB.groups.filter(g=>g.curriculum===1||g.curriculum==='1').map(g=>`<option value="${g.id}">Група ${g.group_number}</option>`).join('');
   const pgrp=document.getElementById('picker-group');
@@ -2776,7 +2787,13 @@ async function openOrderModal(id){
   currentOrderId=id;
   const o=DB.orders.find(x=>x.id==id);if(!o)return;
   const persons=DB.orderIndividuals.filter(oi=>oi.order_id==id);
-  orderPersons=persons.map(oi=>({individual_id:oi.individual_id,id_groups:oi.id_groups||null,id:oi.id}));
+  orderPersons=persons.map(oi=>({individual_id:oi.individual_id,id_groups:oi.id_groups||null,id_groups_new:oi.id_groups_new||null,id:oi.id}));
+  // Встановити target group якщо є
+  const firstWithNew=persons.find(oi=>oi.id_groups_new);
+  setTimeout(()=>{
+    const ttg=document.getElementById('transfer-target-group');
+    if(ttg&&firstWithNew)ttg.value=firstWithNew.id_groups_new||'';
+  },100);
   document.getElementById('ord-number').value=o.number||'';
   document.getElementById('ord-date').value=o.date||'';
   document.getElementById('ord-type').value=o.order_type||1;
@@ -2790,8 +2807,11 @@ async function openOrderModal(id){
 
 function onOrderTypeChange(){
   const type=parseInt(document.getElementById('ord-type').value);
-  const titles={1:'Особи для зарахування',2:'Особи для відрахування',3:'Особи для випуску'};
+  const titles={1:'Особи для зарахування',2:'Особи для відрахування',3:'Особи для випуску',4:'Особи для переведення'};
   document.getElementById('ord-persons-title').textContent=titles[type]||'Особи';
+  // Для переведення показуємо блок вибору нової групи
+  const transferBlock=document.getElementById('transfer-group-block');
+  if(transferBlock) transferBlock.style.display=type===4?'flex':'none';
 }
 
 function renderOrderPersonsList(){
@@ -2856,6 +2876,7 @@ function renderOrderPersonsList(){
               <div>
                 <div style="font-size:13px;font-weight:500">${fullName(ind)}</div>
                 <div style="font-size:11px;color:var(--muted)">${fmt(ind.date_birth)}${ind.rnokpp?` · ${ind.rnokpp}`:''}</div>
+                ${orderType===4&&p.id_groups_new?`<div style="font-size:11px;color:#4F46E5">→ ${(()=>{const ng=DB.groups.find(x=>x.id==p.id_groups_new);return ng?`Група ${ng.group_number} (${ng.curriculum} курс)`:'нова група'})()}</div>`:''}
               </div>
             </div>
             <button class="btn btn-sm btn-danger" onclick="orderPersons.splice(${p._idx},1);renderOrderPersonsList()">✕</button>
@@ -2911,7 +2932,7 @@ function addWholeGroup(){
       !DB.pupils.some(p=>p.id_individual===ind.id)
     );
   } else {
-    // Відрахування/випуск — зараховані в цю групу
+    // Відрахування/випуск/переведення — зараховані в цю групу
     candidates=DB.pupils.filter(p=>p.id_groups===gid)
       .map(p=>DB.individuals.find(i=>i.id===p.id_individual))
       .filter(Boolean);
@@ -3018,8 +3039,9 @@ async function saveOrder(){
 
   // Зберігаємо осіб в наказі з групами
   await delWhere('order_individuals','order_id',orderId);
+  const targetGroup=orderType===4?(document.getElementById('transfer-target-group')?.value?parseInt(document.getElementById('transfer-target-group').value):null):null;
   for(const p of orderPersons){
-    await post('order_individuals',{order_id:orderId,individual_id:p.individual_id,id_groups:p.id_groups||null});
+    await post('order_individuals',{order_id:orderId,individual_id:p.individual_id,id_groups:p.id_groups||null,id_groups_new:orderType===4?targetGroup:null});
   }
 
   // Якщо наказ АКТИВНИЙ (і раніше не був активним) — зараховуємо
@@ -3045,6 +3067,19 @@ async function saveOrder(){
 }
 
 async function activateOrder(orderId,orderType,persons){
+  if(orderType===4){
+    // ПЕРЕВЕДЕННЯ — оновлюємо id_groups в pupils на нову групу
+    const targetGroup=document.getElementById('transfer-target-group')?.value?parseInt(document.getElementById('transfer-target-group').value):null;
+    if(!targetGroup){alert('Оберіть нову групу для переведення');return;}
+    for(const p of persons){
+      const pupil=DB.pupils.find(pu=>pu.id_individual===p.individual_id);
+      if(pupil){
+        await patch('pupils',pupil.id,{id_groups:targetGroup});
+        pupil.id_groups=targetGroup;
+      }
+    }
+    return;
+  }
   if(orderType===1){
     // ЗАРАХУВАННЯ — додаємо в pupils з групою з наказу
     for(const p of persons){
@@ -3071,6 +3106,20 @@ async function activateOrder(orderId,orderType,persons){
 }
 
 async function cancelOrder(orderId,orderType,persons){
+  if(orderType===4){
+    // ВІДКАТ ПЕРЕВЕДЕННЯ — повертаємо стару групу
+    const orderInds=await api('order_individuals',`?order_id=eq.${orderId}`);
+    const personsToRevert=Array.isArray(orderInds)?orderInds:persons;
+    for(const p of personsToRevert){
+      if(!p.id_groups)continue; // немає старої групи
+      const pupil=DB.pupils.find(pu=>pu.id_individual===p.individual_id);
+      if(pupil){
+        await patch('pupils',pupil.id,{id_groups:p.id_groups});
+        pupil.id_groups=p.id_groups;
+      }
+    }
+    return;
+  }
   if(orderType===1){
     // ВІДМІНА ЗАРАХУВАННЯ — видаляємо з pupils всіх осіб які є в цьому наказі
     // Беремо осіб з order_individuals (найсвіжіші дані з бази)
