@@ -3820,13 +3820,22 @@ async function saveUser(){
       const u = usersData.find(x => x.login === editingUserLogin);
       if(u){ u.initials = initials; u.role_id = roleId; }
     } else {
-      // Новий користувач — тільки admin або secretary в dic_users
+      // Новий користувач — dic_users не має serial id тому перевіряємо по HTTP статусу
       const newUser = { login, initials, role_id: roleId, password_hash: hashVal };
-      const res = await post('dic_users', newUser);
-      if(Array.isArray(res) && res[0]){
-        usersData.push(res[0]);
+      const resp = await fetch(`${SB}/rest/v1/dic_users`, {
+        method: 'POST',
+        headers: {...H, Prefer: 'return=representation'},
+        body: JSON.stringify(newUser)
+      });
+      if(resp.ok){
+        usersData.push({login, initials, role_id: roleId});
       } else {
-        errEl.textContent = 'Помилка збереження. Можливо логін вже існує.';
+        let err = {};
+        try{ err = await resp.json(); }catch(e){}
+        const isDup = err?.code==='23505' || (err?.message||'').includes('duplicate');
+        errEl.textContent = isDup
+          ? 'Логін вже існує. Оберіть інший.'
+          : 'Помилка збереження: ' + (err?.message || resp.status);
         return;
       }
     }
