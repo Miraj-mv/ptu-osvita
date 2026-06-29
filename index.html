@@ -3821,7 +3821,7 @@ async function saveUser(){
       if(u){ u.initials = initials; u.role_id = roleId; }
     } else {
       // Новий користувач — dic_users не має serial id тому перевіряємо по HTTP статусу
-      const newUser = { login, initials, role_id: roleId, password_hash: hashVal };
+      const newUser = { login, initials, role_id: roleId, password_hash: hashVal, create_time: new Date().toISOString(), edit_time: new Date().toISOString() };
       const resp = await fetch(`${SB}/rest/v1/dic_users`, {
         method: 'POST',
         headers: {...H, Prefer: 'return=representation'},
