@@ -1891,13 +1891,10 @@ tbody tr.clickable:hover td{background:#EEF2FF}
       </div>
     </div>
     <div style="border-top:1px solid var(--border);padding-top:16px">
-      <!-- Блок нової групи для переведення -->
+      <!-- Інфо-блок для переведення -->
       <div id="transfer-group-block" style="display:none;align-items:center;gap:10px;padding:10px 14px;background:#EEF2FF;border-radius:8px;margin-bottom:12px;border:1px solid #C7D2FE">
-        <span style="font-size:13px;font-weight:600;color:#4F46E5">🔄 Перевести до групи:</span>
-        <select id="transfer-target-group" style="padding:7px 10px;font-size:13px;border:1px solid #C7D2FE;border-radius:8px;font-family:var(--font);outline:none;cursor:pointer;flex:1">
-          <option value="">— Оберіть нову групу —</option>
-        </select>
-        <div style="font-size:11px;color:#534AB7">При активації наказу здобувачі будуть переведені до обраної групи</div>
+        <span style="font-size:13px;font-weight:600;color:#4F46E5">🔄 Переведення</span>
+        <div style="font-size:11px;color:#534AB7">Для кожної групи нижче оберіть окремо нову групу (курс), куди переводяться здобувачі</div>
       </div>
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;flex-wrap:wrap;gap:8px">
         <div style="font-size:13px;font-weight:600" id="ord-persons-title">Особи в наказі</div>
@@ -2788,12 +2785,6 @@ async function openOrderModal(id){
   const o=DB.orders.find(x=>x.id==id);if(!o)return;
   const persons=DB.orderIndividuals.filter(oi=>oi.order_id==id);
   orderPersons=persons.map(oi=>({individual_id:oi.individual_id,id_groups:oi.id_groups||null,id_groups_new:oi.id_groups_new||null,id:oi.id}));
-  // Встановити target group якщо є
-  const firstWithNew=persons.find(oi=>oi.id_groups_new);
-  setTimeout(()=>{
-    const ttg=document.getElementById('transfer-target-group');
-    if(ttg&&firstWithNew)ttg.value=firstWithNew.id_groups_new||'';
-  },100);
   document.getElementById('ord-number').value=o.number||'';
   document.getElementById('ord-date').value=o.date||'';
   document.getElementById('ord-type').value=o.order_type||1;
@@ -2863,6 +2854,14 @@ function renderOrderPersonsList(){
             <option value="">Змінити групу...</option>
             ${DB.groups.map(gr=>`<option value="${gr.id}">Гр. ${gr.group_number}</option>`).join('')}
           </select>`:''}
+          ${orderType===4?(()=>{
+            const curTarget=(list.find(p=>p.id_groups_new)||{}).id_groups_new||'';
+            return `<select style="padding:3px 7px;font-size:12px;border:1px solid #C7D2FE;border-radius:6px;font-family:var(--font);outline:none;cursor:pointer;max-width:170px;background:#EEF2FF;color:#4F46E5;font-weight:600"
+              onchange="setTransferTargetForGroup('${gid}',+this.value)">
+              <option value="">→ Оберіть нову групу</option>
+              ${DB.groups.filter(gr=>String(gr.id)!==String(gid)).map(gr=>`<option value="${gr.id}" ${String(curTarget)===String(gr.id)?'selected':''}>→ Гр. ${gr.group_number} (${gr.curriculum} курс)</option>`).join('')}
+            </select>`;
+          })():''}
           <button class="btn btn-sm btn-danger" onclick="removeGroupFromOrder('${gid}')">Видалити</button>
         </div>
       </div>
@@ -2905,6 +2904,18 @@ function changeGroupForPersons(oldGid,newGid){
     const pGid=p.id_groups||ind?.id_group_planning||'none';
     if(String(pGid)===String(oldGid)){
       p.id_groups=newGid;
+    }
+  });
+  renderOrderPersonsList();
+}
+
+function setTransferTargetForGroup(gid,newGid){
+  if(!newGid)return;
+  orderPersons.forEach(p=>{
+    const ind=DB.individuals.find(x=>x.id===p.individual_id);
+    const pGid=p.id_groups||ind?.id_group_planning||'none';
+    if(String(pGid)===String(gid)){
+      p.id_groups_new=newGid;
     }
   });
   renderOrderPersonsList();
@@ -3022,6 +3033,10 @@ async function saveOrder(){
   const orderState=parseInt(document.getElementById('ord-state').value);
   const orderData={number:num,date:document.getElementById('ord-date').value||null,order_type:orderType,state:orderState};
 
+  if(orderType===4 && orderPersons.length && orderPersons.some(p=>!p.id_groups_new)){
+    return alert('Оберіть нову групу для кожної групи, доданої до наказу');
+  }
+
   let orderId=currentOrderId;
 
   // Зберігаємо попередній стан наказу (для відкату)
@@ -3039,9 +3054,8 @@ async function saveOrder(){
 
   // Зберігаємо осіб в наказі з групами
   await delWhere('order_individuals','order_id',orderId);
-  const targetGroup=orderType===4?(document.getElementById('transfer-target-group')?.value?parseInt(document.getElementById('transfer-target-group').value):null):null;
   for(const p of orderPersons){
-    await post('order_individuals',{order_id:orderId,individual_id:p.individual_id,id_groups:p.id_groups||null,id_groups_new:orderType===4?targetGroup:null});
+    await post('order_individuals',{order_id:orderId,individual_id:p.individual_id,id_groups:p.id_groups||null,id_groups_new:orderType===4?(p.id_groups_new||null):null});
   }
 
   // Якщо наказ АКТИВНИЙ (і раніше не був активним) — зараховуємо
@@ -3058,7 +3072,7 @@ async function saveOrder(){
   const updOrder=DB.orders.find(o=>o.id==orderId);
   if(updOrder)Object.assign(updOrder,orderData);
   DB.orderIndividuals=DB.orderIndividuals.filter(oi=>oi.order_id!=orderId);
-  orderPersons.forEach(p=>DB.orderIndividuals.push({order_id:orderId,individual_id:p.individual_id,id_groups:p.id_groups||null}));
+  orderPersons.forEach(p=>DB.orderIndividuals.push({order_id:orderId,individual_id:p.individual_id,id_groups:p.id_groups||null,id_groups_new:p.id_groups_new||null}));
 
   closeModal('order');
   renderOrders();
@@ -3068,14 +3082,14 @@ async function saveOrder(){
 
 async function activateOrder(orderId,orderType,persons){
   if(orderType===4){
-    // ПЕРЕВЕДЕННЯ — оновлюємо id_groups в pupils на нову групу
-    const targetGroup=document.getElementById('transfer-target-group')?.value?parseInt(document.getElementById('transfer-target-group').value):null;
-    if(!targetGroup){alert('Оберіть нову групу для переведення');return;}
+    // ПЕРЕВЕДЕННЯ — оновлюємо id_groups в pupils на нову групу (окрему для кожної групи-джерела)
+    const missing=persons.filter(p=>!p.id_groups_new);
+    if(missing.length){alert('Оберіть нову групу для кожної групи, доданої до наказу');return;}
     for(const p of persons){
       const pupil=DB.pupils.find(pu=>pu.id_individual===p.individual_id);
       if(pupil){
-        await patch('pupils',pupil.id,{id_groups:targetGroup});
-        pupil.id_groups=targetGroup;
+        await patch('pupils',pupil.id,{id_groups:p.id_groups_new});
+        pupil.id_groups=p.id_groups_new;
       }
     }
     return;
