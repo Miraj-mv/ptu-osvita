@@ -2108,7 +2108,7 @@ async function startApp(){
 }
 
 async function loadAll(){
-  const [individuals,groups,subjects,teachers,years,subjectTypes,pupils,orders,orderInds,nationalities,cities,docTypes,relTypes,groupTypes]=await Promise.all([
+  const [individuals,groups,subjects,teachers,years,subjectTypes,pupils,orders,orderInds,nationalities,cities,docTypes,relTypes,groupTypes,regions,districts,tcs]=await Promise.all([
     api('individual','?select=id,surname,name,middle_name,date_birth,rnokpp,phone_number,id_group_planning,editor_login,edit_time,create_time&order=surname'),
     api('groups','?order=id'),
     api('subjects','?order=subjects_title'),
@@ -2123,6 +2123,9 @@ async function loadAll(){
     api('dic_doctype',''),
     api('dic_relatives',''),
     api('dic_groups_type','?order=id'),
+    api('dic_region','?order=id'),
+    api('dic_district','?order=id'),
+    api('dic_territorial_community','?order=id'),
   ]);
   DB.individuals=Array.isArray(individuals)?individuals:[];
   DB.groups=Array.isArray(groups)?groups:[];
@@ -2138,6 +2141,9 @@ async function loadAll(){
   DB.docTypes=Array.isArray(docTypes)?docTypes:[];
   DB.relTypes=Array.isArray(relTypes)?relTypes:[];
   DB.groupTypes=Array.isArray(groupTypes)?groupTypes:[];
+  DB.regions=Array.isArray(regions)?regions:[];
+  DB.districts=Array.isArray(districts)?districts:[];
+  DB.tcs=Array.isArray(tcs)?tcs:[];
   renderDashboard();
   populateSelects();
 }
@@ -2467,14 +2473,71 @@ async function openIndividualCard(id){
   openModal('individual');
 }
 
+// Дерево вибору населеного пункту: Область -> Район -> ОТГ -> Населений пункт
+function cityTreeHtml(a,i,arrName){
+  let regionId=a._region!=null?a._region:null, districtId=a._district!=null?a._district:null, tcId=a._tc!=null?a._tc:null;
+  if(a.city_id && a._region==null){
+    const c=DB.cities.find(x=>x.id==a.city_id);
+    if(c){regionId=c.id_region;districtId=c.id_district;tcId=c.id_tc;}
+  }
+  const districts=DB.districts.filter(d=>!regionId||d.id_region==regionId);
+  const tcs=DB.tcs.filter(t=>!districtId||t.id_district==districtId);
+  const cities=DB.cities.filter(c=>(!tcId||c.id_tc==tcId)&&(!districtId||c.id_district==districtId)&&(!regionId||c.id_region==regionId));
+  return `
+    <div class="form-group"><label>Область</label>
+      <select onchange="updateCityTree('${arrName}',${i},'region',this.value)">
+        <option value="">— Область —</option>
+        ${DB.regions.map(r=>`<option value="${r.id}" ${regionId==r.id?'selected':''}>${r.name}</option>`).join('')}
+      </select>
+    </div>
+    <div class="form-group"><label>Район</label>
+      <select onchange="updateCityTree('${arrName}',${i},'district',this.value)">
+        <option value="">— Район —</option>
+        ${districts.map(d=>`<option value="${d.id}" ${districtId==d.id?'selected':''}>${(d.name_district||'').trim()}</option>`).join('')}
+      </select>
+    </div>
+    <div class="form-group"><label>ОТГ (громада)</label>
+      <select onchange="updateCityTree('${arrName}',${i},'tc',this.value)">
+        <option value="">— Громада —</option>
+        ${tcs.map(t=>`<option value="${t.id}" ${tcId==t.id?'selected':''}>${t.name}</option>`).join('')}
+      </select>
+    </div>
+    <div class="form-group"><label>Населений пункт</label>
+      <select onchange="updateCityTree('${arrName}',${i},'city',this.value)">
+        <option value="">— Населений пункт —</option>
+        ${cities.map(c=>`<option value="${c.id}" ${a.city_id==c.id?'selected':''}>${c.city_name||c.id}</option>`).join('')}
+      </select>
+    </div>`;
+}
+function updateCityTree(arrName,i,level,val){
+  const arr=arrName==='ind'?indAddresses:niAddresses;
+  const a=arr[i];if(!a)return;
+  val=val?+val:null;
+  if(level==='region'){a._region=val;a._district=null;a._tc=null;a.city_id=null;}
+  else if(level==='district'){
+    if(a._region==null){const d=DB.districts.find(x=>x.id==val);if(d)a._region=d.id_region;}
+    a._district=val;a._tc=null;a.city_id=null;
+  }
+  else if(level==='tc'){
+    if(a._district==null){const t=DB.tcs.find(x=>x.id==val);if(t)a._district=t.id_district;}
+    a._tc=val;a.city_id=null;
+  }
+  else if(level==='city'){
+    a.city_id=val;
+    const c=DB.cities.find(x=>x.id==val);
+    if(c){a._region=c.id_region;a._district=c.id_district;a._tc=c.id_tc;}
+  }
+  if(arrName==='ind')renderIndAddr();else renderNiAddresses();
+}
+
 // Адреси/Документи/Родичі для особи
 function renderIndAddr(){
   const el=document.getElementById('ind-addresses-list');
   if(!indAddresses.length){el.innerHTML='<div style="color:var(--muted);font-size:13px">Адрес не додано</div>';return;}
   el.innerHTML=indAddresses.map((a,i)=>`<div class="sub-item">
     <div class="sub-item-header"><span class="sub-item-title">${a.adresa_fakt?'Фактична':'Реєстрація'}</span><button class="btn btn-sm btn-danger" onclick="indAddresses.splice(${i},1);renderIndAddr()">🗑</button></div>
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:12px;margin-bottom:10px">${cityTreeHtml(a,i,'ind')}</div>
     <div class="form-grid">
-      <div class="form-group"><label>Місто</label><select onchange="indAddresses[${i}].city_id=+this.value"><option value="">—</option>${DB.cities.map(c=>`<option value="${c.id}" ${a.city_id==c.id?'selected':''}>${c.city_name||c.id}</option>`).join('')}</select></div>
       <div class="form-group"><label>Адреса</label><input type="text" value="${a.adresa||''}" placeholder="вул. Шевченка, 1" oninput="indAddresses[${i}].adresa=this.value"></div>
       <div class="form-group" style="grid-column:1/-1"><label class="checkbox-row"><input type="checkbox" ${a.adresa_fakt?'checked':''} onchange="indAddresses[${i}].adresa_fakt=this.checked"> Фактична адреса</label></div>
     </div>
@@ -2568,7 +2631,7 @@ async function saveIndividualCard(){
   };
   await patch('individual',id,data);
   await delWhere('adress','individual_id',id);
-  for(const a of indAddresses){if(a.adresa||a.city_id){const{_new,...r}=a;delete r.id;r.individual_id=id;await post('adress',r);}}
+  for(const a of indAddresses){if(a.adresa||a.city_id){const{_new,_region,_district,_tc,...r}=a;delete r.id;r.individual_id=id;await post('adress',r);}}
   await delWhere('documents','individual_id',id);
   for(const d of indDocs){if(d.doc_type_id||d.doc_number){const{_new,...r}=d;delete r.id;r.individual_id=id;await post('documents',r);}}
   await delWhere('relatives','individual_id',id);
@@ -2633,13 +2696,8 @@ function renderNiAddresses(){
   if(!niAddresses.length){el.innerHTML='<div style="color:var(--muted);font-size:13px">Не додано</div>';return;}
   el.innerHTML=niAddresses.map((a,i)=>`<div class="sub-item" style="margin-bottom:8px">
     <div class="sub-item-header"><span class="sub-item-title">${a.adresa_fakt?'Фактична':'Реєстрація'}</span><button class="btn btn-sm btn-danger" onclick="niAddresses.splice(${i},1);renderNiAddresses()">🗑</button></div>
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:12px;margin-bottom:10px">${cityTreeHtml(a,i,'ni')}</div>
     <div class="form-grid">
-      <div class="form-group"><label>Місто</label>
-        <select onchange="niAddresses[${i}].city_id=+this.value">
-          <option value="">— Оберіть —</option>
-          ${DB.cities.map(c=>`<option value="${c.id}" ${a.city_id==c.id?'selected':''} >${c.city_name||c.id}</option>`).join('')}
-        </select>
-      </div>
       <div class="form-group"><label>Адреса (вулиця, будинок)</label><input type="text" value="${a.adresa||''}" placeholder="вул. Шевченка, 1" oninput="niAddresses[${i}].adresa=this.value"></div>
       <div class="form-group" style="grid-column:1/-1"><label class="checkbox-row"><input type="checkbox" ${a.adresa_fakt?'checked':''} onchange="niAddresses[${i}].adresa_fakt=this.checked"> Фактична адреса проживання</label></div>
     </div>
@@ -2707,7 +2765,7 @@ async function saveNewIndividual(){
     DB.individuals.sort((a,b)=>a.surname.localeCompare(b.surname));
     // Зберігаємо адреси
     for(const a of niAddresses){
-      if(a.adresa||a.city_id){const{_new,...r}=a;r.individual_id=newId;await post('adress',r);}
+      if(a.adresa||a.city_id){const{_new,_region,_district,_tc,...r}=a;r.individual_id=newId;await post('adress',r);}
     }
     // Зберігаємо документи
     for(const d2 of niDocs){
