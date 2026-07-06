@@ -1282,6 +1282,23 @@ tbody tr.clickable:hover td{background:#EEF2FF}
 .btn-full{width:100%;justify-content:center}
 .form-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
 .form-grid-3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px}
+.city-tree-display{padding:9px 12px;border:1px solid var(--border);border-radius:8px;font-size:13px;cursor:pointer;background:#fff;user-select:none}
+.city-tree-display:hover{border-color:var(--accent)}
+.city-tree-panel{position:absolute;top:calc(100% + 4px);left:0;right:0;z-index:60;background:#fff;border:1px solid var(--border);border-radius:8px;max-height:320px;overflow-y:auto;box-shadow:0 8px 24px rgba(0,0,0,.14);padding:6px}
+.city-tree-panel details{margin-left:0}
+.city-tree-panel details details{margin-left:14px}
+.city-tree-panel summary{cursor:pointer;padding:5px 6px;font-size:13px;border-radius:6px;list-style:none}
+.city-tree-panel summary::-webkit-details-marker{display:none}
+.city-tree-panel summary:before{content:'▸ ';color:var(--muted);font-size:10px}
+.city-tree-panel details[open]>summary:before{content:'▾ '}
+.city-tree-panel summary:hover{background:var(--bg)}
+.city-tree-lvl1>summary{font-weight:600}
+.city-tree-lvl2>summary{font-weight:500;color:var(--text)}
+.city-tree-lvl3>summary{font-weight:400;color:var(--muted)}
+.city-tree-leaves{margin-left:28px}
+.city-tree-leaf{padding:4px 8px;font-size:13px;cursor:pointer;border-radius:6px}
+.city-tree-leaf:hover{background:var(--bg)}
+.city-tree-leaf.active{background:var(--accent);color:#fff;font-weight:600}
 .sub-item select{max-width:100%;width:100%;overflow:hidden}
 .form-group{display:flex;flex-direction:column;gap:5px}
 .form-group label{font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
@@ -2473,60 +2490,51 @@ async function openIndividualCard(id){
   openModal('individual');
 }
 
-// Дерево вибору населеного пункту: Область -> Район -> ОТГ -> Населений пункт
-function cityTreeHtml(a,i,arrName){
-  let regionId=a._region!=null?a._region:null, districtId=a._district!=null?a._district:null, tcId=a._tc!=null?a._tc:null;
-  if(a.city_id && a._region==null){
-    const c=DB.cities.find(x=>x.id==a.city_id);
-    if(c){regionId=c.id_region;districtId=c.id_district;tcId=c.id_tc;}
-  }
-  const districts=DB.districts.filter(d=>!regionId||d.id_region==regionId);
-  const tcs=DB.tcs.filter(t=>!districtId||t.id_district==districtId);
-  const cities=DB.cities.filter(c=>(!tcId||c.id_tc==tcId)&&(!districtId||c.id_district==districtId)&&(!regionId||c.id_region==regionId));
-  return `
-    <div class="form-group"><label>Область</label>
-      <select onchange="updateCityTree('${arrName}',${i},'region',this.value)">
-        <option value="">— Область —</option>
-        ${DB.regions.map(r=>`<option value="${r.id}" ${regionId==r.id?'selected':''}>${r.name}</option>`).join('')}
-      </select>
-    </div>
-    <div class="form-group"><label>Район</label>
-      <select onchange="updateCityTree('${arrName}',${i},'district',this.value)">
-        <option value="">— Район —</option>
-        ${districts.map(d=>`<option value="${d.id}" ${districtId==d.id?'selected':''}>${(d.name_district||'').trim()}</option>`).join('')}
-      </select>
-    </div>
-    <div class="form-group"><label>ОТГ (громада)</label>
-      <select onchange="updateCityTree('${arrName}',${i},'tc',this.value)">
-        <option value="">— Громада —</option>
-        ${tcs.map(t=>`<option value="${t.id}" ${tcId==t.id?'selected':''}>${t.name}</option>`).join('')}
-      </select>
-    </div>
-    <div class="form-group"><label>Населений пункт</label>
-      <select onchange="updateCityTree('${arrName}',${i},'city',this.value)">
-        <option value="">— Населений пункт —</option>
-        ${cities.map(c=>`<option value="${c.id}" ${a.city_id==c.id?'selected':''}>${c.city_name||c.id}</option>`).join('')}
-      </select>
-    </div>`;
+// Дерево вибору населеного пункту в одному списку: Область -> Район -> ОТГ -> Населений пункт
+function cityTreePickerHtml(a,i,arrName){
+  const panelId=`city-tree-panel-${arrName}-${i}`;
+  const selCity=a.city_id?DB.cities.find(c=>c.id==a.city_id):null;
+  const selDistrict=selCity?DB.districts.find(d=>d.id==selCity.id_district):null;
+  const selTc=selCity?DB.tcs.find(t=>t.id==selCity.id_tc):null;
+  const displayText=selCity?[selDistrict&&(selDistrict.name_district||'').trim(),selTc&&selTc.name,selCity.city_name].filter(Boolean).join(' → '):'— Оберіть населений пункт —';
+  const tree=DB.regions.map(r=>{
+    const rDistricts=DB.districts.filter(d=>d.id_region==r.id);
+    if(!rDistricts.length)return '';
+    const isOpenR=selCity&&selCity.id_region==r.id;
+    const districtsHtml=rDistricts.map(d=>{
+      const dTcs=DB.tcs.filter(t=>t.id_district==d.id);
+      if(!dTcs.length)return '';
+      const isOpenD=selCity&&selCity.id_district==d.id;
+      const tcsHtml=dTcs.map(t=>{
+        const tCities=DB.cities.filter(c=>c.id_tc==t.id);
+        if(!tCities.length)return '';
+        const isOpenT=selCity&&selCity.id_tc==t.id;
+        const citiesHtml=tCities.map(c=>`<div class="city-tree-leaf ${a.city_id==c.id?'active':''}" onclick="selectCityFromTree('${arrName}',${i},${c.id})">${c.city_name}</div>`).join('');
+        return `<details class="city-tree-lvl3" ${isOpenT?'open':''}><summary>${t.name}</summary><div class="city-tree-leaves">${citiesHtml}</div></details>`;
+      }).join('');
+      return `<details class="city-tree-lvl2" ${isOpenD?'open':''}><summary>${(d.name_district||'').trim()}</summary>${tcsHtml}</details>`;
+    }).join('');
+    return `<details class="city-tree-lvl1" ${isOpenR?'open':''}><summary>${r.name}</summary>${districtsHtml}</details>`;
+  }).join('');
+  return `<div class="city-tree-picker" style="position:relative">
+    <div class="city-tree-display" onclick="toggleCityTree('${panelId}')">${displayText}</div>
+    <div class="city-tree-panel" id="${panelId}" style="display:none">${tree||'<div style="padding:8px;color:var(--muted);font-size:13px">Довідник населених пунктів порожній</div>'}</div>
+  </div>`;
 }
-function updateCityTree(arrName,i,level,val){
+function toggleCityTree(panelId){
+  document.querySelectorAll('.city-tree-panel').forEach(p=>{if(p.id!==panelId)p.style.display='none';});
+  const el=document.getElementById(panelId);
+  if(el)el.style.display=el.style.display==='block'?'none':'block';
+}
+document.addEventListener('click',e=>{
+  if(!e.target.closest('.city-tree-picker')){
+    document.querySelectorAll('.city-tree-panel').forEach(p=>p.style.display='none');
+  }
+});
+function selectCityFromTree(arrName,i,cityId){
   const arr=arrName==='ind'?indAddresses:niAddresses;
   const a=arr[i];if(!a)return;
-  val=val?+val:null;
-  if(level==='region'){a._region=val;a._district=null;a._tc=null;a.city_id=null;}
-  else if(level==='district'){
-    if(a._region==null){const d=DB.districts.find(x=>x.id==val);if(d)a._region=d.id_region;}
-    a._district=val;a._tc=null;a.city_id=null;
-  }
-  else if(level==='tc'){
-    if(a._district==null){const t=DB.tcs.find(x=>x.id==val);if(t)a._district=t.id_district;}
-    a._tc=val;a.city_id=null;
-  }
-  else if(level==='city'){
-    a.city_id=val;
-    const c=DB.cities.find(x=>x.id==val);
-    if(c){a._region=c.id_region;a._district=c.id_district;a._tc=c.id_tc;}
-  }
+  a.city_id=cityId;
   if(arrName==='ind')renderIndAddr();else renderNiAddresses();
 }
 
@@ -2536,7 +2544,7 @@ function renderIndAddr(){
   if(!indAddresses.length){el.innerHTML='<div style="color:var(--muted);font-size:13px">Адрес не додано</div>';return;}
   el.innerHTML=indAddresses.map((a,i)=>`<div class="sub-item">
     <div class="sub-item-header"><span class="sub-item-title">${a.adresa_fakt?'Фактична':'Реєстрація'}</span><button class="btn btn-sm btn-danger" onclick="indAddresses.splice(${i},1);renderIndAddr()">🗑</button></div>
-    <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:12px;margin-bottom:10px">${cityTreeHtml(a,i,'ind')}</div>
+    <div style="margin-bottom:10px">${cityTreePickerHtml(a,i,'ind')}</div>
     <div class="form-grid">
       <div class="form-group"><label>Адреса</label><input type="text" value="${a.adresa||''}" placeholder="вул. Шевченка, 1" oninput="indAddresses[${i}].adresa=this.value"></div>
       <div class="form-group" style="grid-column:1/-1"><label class="checkbox-row"><input type="checkbox" ${a.adresa_fakt?'checked':''} onchange="indAddresses[${i}].adresa_fakt=this.checked"> Фактична адреса</label></div>
@@ -2696,7 +2704,7 @@ function renderNiAddresses(){
   if(!niAddresses.length){el.innerHTML='<div style="color:var(--muted);font-size:13px">Не додано</div>';return;}
   el.innerHTML=niAddresses.map((a,i)=>`<div class="sub-item" style="margin-bottom:8px">
     <div class="sub-item-header"><span class="sub-item-title">${a.adresa_fakt?'Фактична':'Реєстрація'}</span><button class="btn btn-sm btn-danger" onclick="niAddresses.splice(${i},1);renderNiAddresses()">🗑</button></div>
-    <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:12px;margin-bottom:10px">${cityTreeHtml(a,i,'ni')}</div>
+    <div style="margin-bottom:10px">${cityTreePickerHtml(a,i,'ni')}</div>
     <div class="form-grid">
       <div class="form-group"><label>Адреса (вулиця, будинок)</label><input type="text" value="${a.adresa||''}" placeholder="вул. Шевченка, 1" oninput="niAddresses[${i}].adresa=this.value"></div>
       <div class="form-group" style="grid-column:1/-1"><label class="checkbox-row"><input type="checkbox" ${a.adresa_fakt?'checked':''} onchange="niAddresses[${i}].adresa_fakt=this.checked"> Фактична адреса проживання</label></div>
