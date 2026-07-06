@@ -1299,6 +1299,8 @@ tbody tr.clickable:hover td{background:#EEF2FF}
 .city-tree-leaf{padding:4px 8px;font-size:13px;cursor:pointer;border-radius:6px}
 .city-tree-leaf:hover{background:var(--bg)}
 .city-tree-leaf.active{background:var(--accent);color:#fff;font-weight:600}
+th.sortable{cursor:pointer;user-select:none;white-space:nowrap}
+th.sortable:hover{background:var(--bg)}
 .sub-item select{max-width:100%;width:100%;overflow:hidden}
 .form-group{display:flex;flex-direction:column;gap:5px}
 .form-group label{font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
@@ -2301,6 +2303,28 @@ function renderDashboard(){
 }
 
 // ── ФІЗИЧНІ ОСОБИ ──
+let indSort={col:null,dir:1};
+function sortIcon(col){
+  if(indSort.col!==col)return '<span style="opacity:.25">↕</span>';
+  return indSort.dir===1?'▲':'▼';
+}
+function setIndSort(col){
+  if(indSort.col===col)indSort.dir=-indSort.dir;
+  else{indSort.col=col;indSort.dir=1;}
+  renderIndividuals();
+}
+function indSortValue(s,col){
+  switch(col){
+    case 'name':return fullName(s).toLowerCase();
+    case 'birth':return s.date_birth?new Date(s.date_birth).getTime():-Infinity;
+    case 'rnokpp':return s.rnokpp||'';
+    case 'phone':return s.phone_number||'';
+    case 'status':return getStudentStatus(s.id)||(s.is_edbo?'edbo':'');
+    case 'created':return s.create_time?new Date(s.create_time).getTime():-Infinity;
+    case 'edited':return s.edit_time?new Date(s.edit_time).getTime():-Infinity;
+    default:return '';
+  }
+}
 function populateYearFilter(){
   const yrEl=document.getElementById('filter-ind-year');
   if(!yrEl)return;
@@ -2334,15 +2358,32 @@ function renderIndividuals(){
   const q=(document.getElementById('search-ind').value||'').toLowerCase();
   const yr=document.getElementById('filter-ind-year')?.value||'';
   const edboF=document.getElementById('filter-ind-edbo')?.value||'';
-  const list=DB.individuals.filter(s=>{
+  let list=DB.individuals.filter(s=>{
     const matchQ=!q||fullName(s).toLowerCase().includes(q);
     const matchYr=!yr||(s.create_time&&new Date(s.create_time).getFullYear()==yr);
     const matchEdbo=!edboF||(edboF==='edbo'&&s.is_edbo)||(edboF==='no-edbo'&&!s.is_edbo);
     return matchQ&&matchYr&&matchEdbo;
   });
   if(!list.length){document.getElementById('individuals-tbl').innerHTML='<div class="empty-state">Осіб не знайдено</div>';return;}
+  if(indSort.col){
+    list=[...list].sort((a,b)=>{
+      const va=indSortValue(a,indSort.col), vb=indSortValue(b,indSort.col);
+      if(va<vb)return -1*indSort.dir;
+      if(va>vb)return 1*indSort.dir;
+      return 0;
+    });
+  }
   document.getElementById('individuals-tbl').innerHTML=`<table>
-    <thead><tr><th>ПІБ</th><th>Дата нар.</th><th>РНОКПП</th><th>Телефон</th><th>Статус</th><th>Внесено</th><th>Змінено</th><th></th></tr></thead>
+    <thead><tr>
+      <th class="sortable" onclick="setIndSort('name')">ПІБ ${sortIcon('name')}</th>
+      <th class="sortable" onclick="setIndSort('birth')">Дата нар. ${sortIcon('birth')}</th>
+      <th class="sortable" onclick="setIndSort('rnokpp')">РНОКПП ${sortIcon('rnokpp')}</th>
+      <th class="sortable" onclick="setIndSort('phone')">Телефон ${sortIcon('phone')}</th>
+      <th class="sortable" onclick="setIndSort('status')">Статус ${sortIcon('status')}</th>
+      <th class="sortable" onclick="setIndSort('created')">Внесено ${sortIcon('created')}</th>
+      <th class="sortable" onclick="setIndSort('edited')">Змінено ${sortIcon('edited')}</th>
+      <th></th>
+    </tr></thead>
     <tbody>${list.map(s=>{
       const style=getIndRowStyle(s);
       const edInfo=s.editor_login?`<span style="font-size:11px;color:var(--muted)">${s.editor_login}<br>${fmt(s.edit_time)}</span>`:'—';
