@@ -2798,6 +2798,25 @@ async function resolveIssuedById(name,docTypeId){
   if(rec2&&rec2.id){DB.issuedBy.push(rec2);renderIssuedByDatalist();return rec2.id;}
   return null;
 }
+function onDocTypeChange(arr,i,newType,rerender){
+  arr[i].doc_type_id=+newType;
+  const flags=docFieldFlags(arr[i].doc_type_id);
+  if(flags.hideSerial)arr[i].doc_serial=null;
+  if(flags.hideExpiration)arr[i].date_expiration=null;
+  rerender();
+}
+function docFieldFlags(docTypeId){
+  const t=DB.docTypes.find(x=>x.id==docTypeId);
+  if(!t)return{hideExpiration:false,hideSerial:false};
+  const label=(t.doc_type||'').toLowerCase();
+  const isContactless=label.includes('безконтактний');
+  const isPlainPassport=label.includes('паспорт')&&!isContactless;
+  const isBirthCert=label.includes('народження');
+  return{
+    hideExpiration: t.osvita===true||isPlainPassport||isBirthCert,
+    hideSerial: isContactless
+  };
+}
 function docItemHtml(d,i,typeFilter){
   const types=DB.docTypes.filter(t=>{
     if(typeFilter==='identity')return t.identity_documents===true;
@@ -2811,15 +2830,15 @@ function docItemHtml(d,i,typeFilter){
     </div>
     <div class="form-grid-3">
       <div class="form-group"><label>Тип документу</label>
-        <select onchange="indDocs[${i}].doc_type_id=+this.value;renderIndDocs()">
+        <select onchange="onDocTypeChange(indDocs,${i},this.value,renderIndDocs)">
           <option value="">— Оберіть —</option>
           ${types.map(t=>`<option value="${t.id}" title="${t.doc_type}" ${d.doc_type_id==t.id?'selected':''}>${t.doc_type.length>28?t.doc_type.substring(0,26)+'…':t.doc_type}</option>`).join('')}
         </select>
       </div>
-      <div class="form-group"><label>Серія</label><input type="text" value="${d.doc_serial||''}" placeholder="АА" oninput="indDocs[${i}].doc_serial=this.value"></div>
+      <div class="form-group" ${docFieldFlags(d.doc_type_id).hideSerial?'style="display:none"':''}><label>Серія</label><input type="text" value="${d.doc_serial||''}" placeholder="АА" oninput="indDocs[${i}].doc_serial=this.value"></div>
       <div class="form-group"><label>Номер</label><input type="text" value="${d.doc_number||''}" placeholder="123456" oninput="indDocs[${i}].doc_number=this.value"></div>
       <div class="form-group"><label>Дата видачі</label><input type="date" value="${d.date_issue||''}" oninput="indDocs[${i}].date_issue=this.value"></div>
-      <div class="form-group"><label>Дата закінч.</label><input type="date" value="${d.date_expiration||''}" oninput="indDocs[${i}].date_expiration=this.value"></div>
+      <div class="form-group" ${docFieldFlags(d.doc_type_id).hideExpiration?'style="display:none"':''}><label>Дата закінч.</label><input type="date" value="${d.date_expiration||''}" oninput="indDocs[${i}].date_expiration=this.value"></div>
       <div class="form-group" style="grid-column:1/-1"><label>Ким видано</label>
         <input type="text" list="${issuedByDatalistId(d,typeFilter)}" value="${issuedByLabel(d)}" placeholder="Назва органу/закладу, що видав" oninput="indDocs[${i}]._issued_name=this.value">
       </div>
@@ -2920,15 +2939,15 @@ function niDocItemHtml(d,i,typeFilter,prefix){
     </div>
     <div class="form-grid-3">
       <div class="form-group"><label>Тип документу</label>
-        <select style="max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" onchange="${prefix}Docs[${i}].doc_type_id=+this.value;renderNiDocs()">
+        <select style="max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" onchange="onDocTypeChange(${prefix}Docs,${i},this.value,renderNiDocs)">
           <option value="">— Оберіть —</option>
           ${types.map(t=>`<option value="${t.id}" title="${t.doc_type}" ${d.doc_type_id==t.id?'selected':''}>${t.doc_type.length>28?t.doc_type.substring(0,26)+'…':t.doc_type}</option>`).join('')}
         </select>
       </div>
-      <div class="form-group"><label>Серія</label><input type="text" value="${d.doc_serial||''}" placeholder="АА" oninput="${prefix}Docs[${i}].doc_serial=this.value"></div>
+      <div class="form-group" ${docFieldFlags(d.doc_type_id).hideSerial?'style="display:none"':''}><label>Серія</label><input type="text" value="${d.doc_serial||''}" placeholder="АА" oninput="${prefix}Docs[${i}].doc_serial=this.value"></div>
       <div class="form-group"><label>Номер</label><input type="text" value="${d.doc_number||''}" placeholder="123456" oninput="${prefix}Docs[${i}].doc_number=this.value"></div>
       <div class="form-group"><label>Дата видачі</label><input type="date" value="${d.date_issue||''}" oninput="${prefix}Docs[${i}].date_issue=this.value"></div>
-      <div class="form-group"><label>Дата закінч.</label><input type="date" value="${d.date_expiration||''}" oninput="${prefix}Docs[${i}].date_expiration=this.value"></div>
+      <div class="form-group" ${docFieldFlags(d.doc_type_id).hideExpiration?'style="display:none"':''}><label>Дата закінч.</label><input type="date" value="${d.date_expiration||''}" oninput="${prefix}Docs[${i}].date_expiration=this.value"></div>
       <div class="form-group" style="grid-column:1/-1"><label>Ким видано</label>
         <input type="text" list="${issuedByDatalistId(d,typeFilter)}" value="${issuedByLabel(d)}" placeholder="Назва органу/закладу, що видав" oninput="${prefix}Docs[${i}]._issued_name=this.value">
       </div>
