@@ -2761,12 +2761,18 @@ function issuedByLabel(d){
   const rec=DB.issuedBy.find(x=>x.id==d.issued_by_id);
   return rec?rec.issued_name:'';
 }
-async function resolveIssuedById(name,group){
+async function resolveIssuedById(name,docTypeId){
   if(!name||!name.trim())return null;
   const trimmed=name.trim();
   let rec=DB.issuedBy.find(x=>(x.issued_name||'').trim().toLowerCase()===trimmed.toLowerCase());
   if(rec)return rec.id;
-  const flag=group==='osvita'?{iseducation:true}:group==='identity'?{ispassport:true}:{isother:true};
+  const t=DB.docTypes.find(x=>x.id==docTypeId);
+  const label=(t?.doc_type||'').toLowerCase();
+  let flag;
+  if(t?.osvita)flag={iseducation:true};
+  else if(label.includes('безконтактний'))flag={isidcard:true};
+  else if(label.includes('паспорт'))flag={ispassport:true};
+  else flag={isother:true};
   const created=await post('dic_issued_by',{issued_name:trimmed,...flag});
   const rec2=Array.isArray(created)?created[0]:created;
   if(rec2&&rec2.id){DB.issuedBy.push(rec2);renderIssuedByDatalist();return rec2.id;}
@@ -2866,7 +2872,7 @@ async function saveIndividualCard(){
   for(const d of indDocs){
     if(d.doc_type_id||d.doc_number){
       const{_new,_issued_name,...r}=d;delete r.id;r.individual_id=id;
-      if(_issued_name!==undefined)r.issued_by_id=await resolveIssuedById(_issued_name,getDocGroup(d));
+      if(_issued_name!==undefined)r.issued_by_id=await resolveIssuedById(_issued_name,d.doc_type_id);
       await post('documents',r);
     }
   }
@@ -3010,7 +3016,7 @@ async function saveNewIndividual(){
     for(const d2 of niDocs){
       if(d2.doc_type_id||d2.doc_number){
         const{_new,_group,_issued_name,...r}=d2;r.individual_id=newId;
-        if(_issued_name)r.issued_by_id=await resolveIssuedById(_issued_name,_group||getDocGroup(d2));
+        if(_issued_name)r.issued_by_id=await resolveIssuedById(_issued_name,d2.doc_type_id);
         await post('documents',r);
       }
     }
