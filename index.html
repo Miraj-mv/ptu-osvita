@@ -2152,7 +2152,7 @@ async function startApp(){
 
 async function loadAll(){
   const [individuals,groups,subjects,teachers,years,subjectTypes,pupils,orders,orderInds,nationalities,cities,docTypes,relTypes,groupTypes,regions,districts,tcs,issuedBy]=await Promise.all([
-    api('individual','?select=id,surname,name,middle_name,date_birth,rnokpp,phone_number,id_group_planning,editor_login,edit_time,create_time&order=surname'),
+    api('individual','?select=id,surname,name,middle_name,date_birth,rnokpp,phone_number,id_group_planning,unzr,editor_login,edit_time,create_time&order=surname'),
     api('groups','?order=id'),
     api('subjects','?order=subjects_title'),
     api('teachers','?select=id,surname,name,middle_name,date_birth,login&order=surname'),
