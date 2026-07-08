@@ -1411,7 +1411,11 @@ th.sortable:hover{background:var(--bg)}
 </style>
 </head>
 <body>
-<datalist id="issued-by-datalist"></datalist>
+<datalist id="issued-by-education"></datalist>
+<datalist id="issued-by-passport"></datalist>
+<datalist id="issued-by-idcard"></datalist>
+<datalist id="issued-by-other"></datalist>
+<datalist id="issued-by-identity-all"></datalist>
 <!-- LOGIN -->
 <div class="login-wrap" id="login-wrap">
   <div class="login-box">
@@ -2752,9 +2756,30 @@ function addAddressRow(){indAddresses.push({individual_id:currentIndId,city_id:n
 
 // Довідник "Ким видано" — комбобокс з автопідказками + можливість вписати нове значення
 function renderIssuedByDatalist(){
-  const el=document.getElementById('issued-by-datalist');
-  if(!el)return;
-  el.innerHTML=DB.issuedBy.map(x=>`<option value="${(x.issued_name||'').replace(/"/g,'&quot;')}">`).join('');
+  const opt=x=>`<option value="${(x.issued_name||'').replace(/"/g,'&quot;')}">`;
+  const set=(id,filterFn)=>{const el=document.getElementById(id);if(el)el.innerHTML=DB.issuedBy.filter(filterFn).map(opt).join('');};
+  set('issued-by-education',x=>x.iseducation===true);
+  set('issued-by-passport',x=>x.ispassport===true);
+  set('issued-by-idcard',x=>x.isidcard===true);
+  set('issued-by-other',x=>x.isother===true);
+  set('issued-by-identity-all',x=>x.isidcard===true||x.ispassport===true||x.isother===true);
+}
+function issuedByFlagCategory(docTypeId){
+  const t=DB.docTypes.find(x=>x.id==docTypeId);
+  if(!t)return null;
+  if(t.osvita)return 'education';
+  const label=(t.doc_type||'').toLowerCase();
+  if(label.includes('безконтактний'))return 'idcard';
+  if(label.includes('паспорт'))return 'passport';
+  if(t.identity_documents)return 'other';
+  return 'other';
+}
+function issuedByDatalistId(d,typeFilter){
+  const cat=issuedByFlagCategory(d.doc_type_id);
+  if(cat)return 'issued-by-'+cat;
+  if(typeFilter==='osvita')return 'issued-by-education';
+  if(typeFilter==='identity')return 'issued-by-identity-all';
+  return 'issued-by-other';
 }
 function issuedByLabel(d){
   if(d._issued_name!=null)return d._issued_name;
@@ -2766,13 +2791,8 @@ async function resolveIssuedById(name,docTypeId){
   const trimmed=name.trim();
   let rec=DB.issuedBy.find(x=>(x.issued_name||'').trim().toLowerCase()===trimmed.toLowerCase());
   if(rec)return rec.id;
-  const t=DB.docTypes.find(x=>x.id==docTypeId);
-  const label=(t?.doc_type||'').toLowerCase();
-  let flag;
-  if(t?.osvita)flag={iseducation:true};
-  else if(label.includes('безконтактний'))flag={isidcard:true};
-  else if(label.includes('паспорт'))flag={ispassport:true};
-  else flag={isother:true};
+  const cat=issuedByFlagCategory(docTypeId)||'other';
+  const flag=cat==='education'?{iseducation:true}:cat==='idcard'?{isidcard:true}:cat==='passport'?{ispassport:true}:{isother:true};
   const created=await post('dic_issued_by',{issued_name:trimmed,...flag});
   const rec2=Array.isArray(created)?created[0]:created;
   if(rec2&&rec2.id){DB.issuedBy.push(rec2);renderIssuedByDatalist();return rec2.id;}
@@ -2801,7 +2821,7 @@ function docItemHtml(d,i,typeFilter){
       <div class="form-group"><label>Дата видачі</label><input type="date" value="${d.date_issue||''}" oninput="indDocs[${i}].date_issue=this.value"></div>
       <div class="form-group"><label>Дата закінч.</label><input type="date" value="${d.date_expiration||''}" oninput="indDocs[${i}].date_expiration=this.value"></div>
       <div class="form-group" style="grid-column:1/-1"><label>Ким видано</label>
-        <input type="text" list="issued-by-datalist" value="${issuedByLabel(d)}" placeholder="Назва органу/закладу, що видав" oninput="indDocs[${i}]._issued_name=this.value">
+        <input type="text" list="${issuedByDatalistId(d,typeFilter)}" value="${issuedByLabel(d)}" placeholder="Назва органу/закладу, що видав" oninput="indDocs[${i}]._issued_name=this.value">
       </div>
       <div class="form-group"><label>Статус</label>
         <select onchange="indDocs[${i}].iscanceled=this.value==='1'">
@@ -2910,7 +2930,7 @@ function niDocItemHtml(d,i,typeFilter,prefix){
       <div class="form-group"><label>Дата видачі</label><input type="date" value="${d.date_issue||''}" oninput="${prefix}Docs[${i}].date_issue=this.value"></div>
       <div class="form-group"><label>Дата закінч.</label><input type="date" value="${d.date_expiration||''}" oninput="${prefix}Docs[${i}].date_expiration=this.value"></div>
       <div class="form-group" style="grid-column:1/-1"><label>Ким видано</label>
-        <input type="text" list="issued-by-datalist" value="${issuedByLabel(d)}" placeholder="Назва органу/закладу, що видав" oninput="${prefix}Docs[${i}]._issued_name=this.value">
+        <input type="text" list="${issuedByDatalistId(d,typeFilter)}" value="${issuedByLabel(d)}" placeholder="Назва органу/закладу, що видав" oninput="${prefix}Docs[${i}]._issued_name=this.value">
       </div>
       <div class="form-group"><label>Статус</label>
         <select onchange="${prefix}Docs[${i}].iscanceled=this.value==='1'">
