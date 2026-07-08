@@ -2368,6 +2368,7 @@ async function openPlanningReport(){
   document.getElementById('modal-planning-report').classList.add('open');
   const body=document.getElementById('planning-report-body');
   body.innerHTML='<div class="empty-state">Завантаження…</div>';
+  const selectedYear=document.getElementById('filter-ind-year')?.value||'';
 
   // Довантажуємо документи та довідник професій (не входять до основного завантаження)
   const [allDocs,professionsCurrent,docTypes,issuedBy]=await Promise.all([
@@ -2406,7 +2407,11 @@ async function openPlanningReport(){
     };
   }
 
-  const planning=DB.individuals.filter(s=>s.id_group_planning);
+  const planning=DB.individuals.filter(s=>{
+    if(!s.id_group_planning)return false;
+    if(selectedYear&&(!s.create_time||new Date(s.create_time).getFullYear()!=selectedYear))return false;
+    return true;
+  });
   const byGroup={};
   planning.forEach(s=>{(byGroup[s.id_group_planning]=byGroup[s.id_group_planning]||[]).push(s);});
   const groupIds=Object.keys(byGroup).map(Number).sort((a,b)=>{
@@ -2415,7 +2420,7 @@ async function openPlanningReport(){
   });
 
   if(!groupIds.length){
-    body.innerHTML='<div class="empty-state">Немає осіб з плановим зарахуванням (поле "Планова група" не заповнене)</div>';
+    body.innerHTML=`<div class="empty-state">Немає осіб з плановим зарахуванням${selectedYear?' за '+selectedYear+' рік':''} (поле "Планова група" не заповнене)</div>`;
     return;
   }
 
@@ -2423,7 +2428,7 @@ async function openPlanningReport(){
   let html=`<div class="print-report">
     <div style="text-align:center;margin-bottom:18px">
       <div style="font-size:16px;font-weight:700">Звіт: фізичні особи, які планують навчатися</div>
-      <div style="font-size:12px;color:var(--muted);margin-top:4px">Сформовано: ${new Date().toLocaleString('uk-UA')}</div>
+      <div style="font-size:12px;color:var(--muted);margin-top:4px">Сформовано: ${new Date().toLocaleString('uk-UA')}${selectedYear?' · Рік внесення: '+selectedYear:''}</div>
     </div>`;
 
   groupIds.forEach(gid=>{
