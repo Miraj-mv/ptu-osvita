@@ -1411,6 +1411,7 @@ th.sortable:hover{background:var(--bg)}
 </style>
 </head>
 <body>
+<datalist id="issued-by-datalist"></datalist>
 <!-- LOGIN -->
 <div class="login-wrap" id="login-wrap">
   <div class="login-box">
@@ -2189,6 +2190,7 @@ async function loadAll(){
   DB.districts=Array.isArray(districts)?districts:[];
   DB.tcs=Array.isArray(tcs)?tcs:[];
   DB.issuedBy=Array.isArray(issuedBy)?issuedBy:[];
+  renderIssuedByDatalist();
   renderDashboard();
   populateSelects();
 }
@@ -2748,6 +2750,28 @@ function renderIndAddr(){
 }
 function addAddressRow(){indAddresses.push({individual_id:currentIndId,city_id:null,adresa:'',adresa_fakt:false,_new:true});renderIndAddr();}
 
+// Довідник "Ким видано" — комбобокс з автопідказками + можливість вписати нове значення
+function renderIssuedByDatalist(){
+  const el=document.getElementById('issued-by-datalist');
+  if(!el)return;
+  el.innerHTML=DB.issuedBy.map(x=>`<option value="${(x.issued_name||'').replace(/"/g,'&quot;')}">`).join('');
+}
+function issuedByLabel(d){
+  if(d._issued_name!=null)return d._issued_name;
+  const rec=DB.issuedBy.find(x=>x.id==d.issued_by_id);
+  return rec?rec.issued_name:'';
+}
+async function resolveIssuedById(name,group){
+  if(!name||!name.trim())return null;
+  const trimmed=name.trim();
+  let rec=DB.issuedBy.find(x=>(x.issued_name||'').trim().toLowerCase()===trimmed.toLowerCase());
+  if(rec)return rec.id;
+  const flag=group==='osvita'?{iseducation:true}:group==='identity'?{ispassport:true}:{isother:true};
+  const created=await post('dic_issued_by',{issued_name:trimmed,...flag});
+  const rec2=Array.isArray(created)?created[0]:created;
+  if(rec2&&rec2.id){DB.issuedBy.push(rec2);renderIssuedByDatalist();return rec2.id;}
+  return null;
+}
 function docItemHtml(d,i,typeFilter){
   const types=DB.docTypes.filter(t=>{
     if(typeFilter==='identity')return t.identity_documents===true;
@@ -2770,6 +2794,9 @@ function docItemHtml(d,i,typeFilter){
       <div class="form-group"><label>Номер</label><input type="text" value="${d.doc_number||''}" placeholder="123456" oninput="indDocs[${i}].doc_number=this.value"></div>
       <div class="form-group"><label>Дата видачі</label><input type="date" value="${d.date_issue||''}" oninput="indDocs[${i}].date_issue=this.value"></div>
       <div class="form-group"><label>Дата закінч.</label><input type="date" value="${d.date_expiration||''}" oninput="indDocs[${i}].date_expiration=this.value"></div>
+      <div class="form-group" style="grid-column:1/-1"><label>Ким видано</label>
+        <input type="text" list="issued-by-datalist" value="${issuedByLabel(d)}" placeholder="Назва органу/закладу, що видав" oninput="indDocs[${i}]._issued_name=this.value">
+      </div>
       <div class="form-group"><label>Статус</label>
         <select onchange="indDocs[${i}].iscanceled=this.value==='1'">
           <option value="0" ${!d.iscanceled?'selected':''}>Дійсний</option>
@@ -2836,7 +2863,13 @@ async function saveIndividualCard(){
   await delWhere('adress','individual_id',id);
   for(const a of indAddresses){if(a.adresa||a.city_id){const{_new,_region,_district,_tc,...r}=a;delete r.id;r.individual_id=id;await post('adress',r);}}
   await delWhere('documents','individual_id',id);
-  for(const d of indDocs){if(d.doc_type_id||d.doc_number){const{_new,...r}=d;delete r.id;r.individual_id=id;await post('documents',r);}}
+  for(const d of indDocs){
+    if(d.doc_type_id||d.doc_number){
+      const{_new,_issued_name,...r}=d;delete r.id;r.individual_id=id;
+      if(_issued_name!==undefined)r.issued_by_id=await resolveIssuedById(_issued_name,getDocGroup(d));
+      await post('documents',r);
+    }
+  }
   await delWhere('relatives','individual_id',id);
   for(const r of indRelatives){if(r.pib||r.telephone){const{_new,...rest}=r;delete rest.id;rest.individual_id=id;await post('relatives',rest);}}
   const idx=DB.individuals.findIndex(x=>x.id===id);
@@ -2870,6 +2903,9 @@ function niDocItemHtml(d,i,typeFilter,prefix){
       <div class="form-group"><label>Номер</label><input type="text" value="${d.doc_number||''}" placeholder="123456" oninput="${prefix}Docs[${i}].doc_number=this.value"></div>
       <div class="form-group"><label>Дата видачі</label><input type="date" value="${d.date_issue||''}" oninput="${prefix}Docs[${i}].date_issue=this.value"></div>
       <div class="form-group"><label>Дата закінч.</label><input type="date" value="${d.date_expiration||''}" oninput="${prefix}Docs[${i}].date_expiration=this.value"></div>
+      <div class="form-group" style="grid-column:1/-1"><label>Ким видано</label>
+        <input type="text" list="issued-by-datalist" value="${issuedByLabel(d)}" placeholder="Назва органу/закладу, що видав" oninput="${prefix}Docs[${i}]._issued_name=this.value">
+      </div>
       <div class="form-group"><label>Статус</label>
         <select onchange="${prefix}Docs[${i}].iscanceled=this.value==='1'">
           <option value="0" ${!d.iscanceled?'selected':''}>Дійсний</option>
@@ -2972,7 +3008,11 @@ async function saveNewIndividual(){
     }
     // Зберігаємо документи
     for(const d2 of niDocs){
-      if(d2.doc_type_id||d2.doc_number){const{_new,_group,...r}=d2;r.individual_id=newId;await post('documents',r);}
+      if(d2.doc_type_id||d2.doc_number){
+        const{_new,_group,_issued_name,...r}=d2;r.individual_id=newId;
+        if(_issued_name)r.issued_by_id=await resolveIssuedById(_issued_name,_group||getDocGroup(d2));
+        await post('documents',r);
+      }
     }
     // Зберігаємо родичів
     for(const r of niRelatives){
