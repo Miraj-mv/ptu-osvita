@@ -2919,7 +2919,7 @@ async function saveIndividualCard(){
     docsToSave=[];
     for(const d of indDocs){
       if(d.doc_type_id||d.doc_number){
-        const{_new,_issued_name,...r}=d;delete r.id;r.individual_id=id;
+        const{_new,_issued_name,_group,...r}=d;delete r.id;r.individual_id=id;
         if(_issued_name!==undefined)r.issued_by_id=await resolveIssuedById(_issued_name,d.doc_type_id);
         if(r.date_issue==='')r.date_issue=null;
         if(r.date_expiration==='')r.date_expiration=null;
