@@ -2910,16 +2910,39 @@ async function saveIndividualCard(){
     editor_login:session.login,edit_time:now,
   };
   await patch('individual',id,data);
+
+  // Спочатку готуємо нові дані (включно з мережевим resolveIssuedById),
+  // і лише після успішної підготовки видаляємо старі записи — щоб мережева
+  // помилка НІКОЛИ не призводила до втрати вже збережених документів/адрес.
+  let docsToSave=null;
+  try{
+    docsToSave=[];
+    for(const d of indDocs){
+      if(d.doc_type_id||d.doc_number){
+        const{_new,_issued_name,...r}=d;delete r.id;r.individual_id=id;
+        if(_issued_name!==undefined)r.issued_by_id=await resolveIssuedById(_issued_name,d.doc_type_id);
+        docsToSave.push(r);
+      }
+    }
+  }catch(e){
+    alert('⚠️ Не вдалося підготувати документи до збереження ('+e.message+'). Документи залишено без змін, спробуйте зберегти ще раз.');
+    docsToSave=null;
+  }
+
   await delWhere('adress','individual_id',id);
   for(const a of indAddresses){if(a.adresa||a.city_id){const{_new,_region,_district,_tc,...r}=a;delete r.id;r.individual_id=id;await post('adress',r);}}
-  await delWhere('documents','individual_id',id);
-  for(const d of indDocs){
-    if(d.doc_type_id||d.doc_number){
-      const{_new,_issued_name,...r}=d;delete r.id;r.individual_id=id;
-      if(_issued_name!==undefined)r.issued_by_id=await resolveIssuedById(_issued_name,d.doc_type_id);
-      await post('documents',r);
+
+  if(docsToSave){
+    await delWhere('documents','individual_id',id);
+    const failed=[];
+    for(const r of docsToSave){
+      const res=await post('documents',r);
+      const ok=Array.isArray(res)?res[0]?.id:res?.id;
+      if(!ok)failed.push(r);
     }
+    if(failed.length)alert('⚠️ Не вдалося зберегти '+failed.length+' документ(и). Перевірте, чи заповнені обов\'язкові поля (тип документа тощо), і спробуйте ще раз.');
   }
+
   await delWhere('relatives','individual_id',id);
   for(const r of indRelatives){if(r.pib||r.telephone){const{_new,...rest}=r;delete rest.id;rest.individual_id=id;await post('relatives',rest);}}
   const idx=DB.individuals.findIndex(x=>x.id===id);
@@ -3057,13 +3080,17 @@ async function saveNewIndividual(){
       if(a.adresa||a.city_id){const{_new,_region,_district,_tc,...r}=a;r.individual_id=newId;await post('adress',r);}
     }
     // Зберігаємо документи
+    let docFailCount=0;
     for(const d2 of niDocs){
       if(d2.doc_type_id||d2.doc_number){
         const{_new,_group,_issued_name,...r}=d2;r.individual_id=newId;
         if(_issued_name)r.issued_by_id=await resolveIssuedById(_issued_name,d2.doc_type_id);
-        await post('documents',r);
+        const res=await post('documents',r);
+        const ok=Array.isArray(res)?res[0]?.id:res?.id;
+        if(!ok)docFailCount++;
       }
     }
+    if(docFailCount)alert('⚠️ Не вдалося зберегти '+docFailCount+' документ(и) для цієї особи. Відкрийте картку і додайте їх ще раз.');
     // Зберігаємо родичів
     for(const r of niRelatives){
       if(r.pib||r.telephone){const{_new,...rest}=r;rest.individual_id=newId;await post('relatives',rest);}
