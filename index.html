@@ -2921,6 +2921,9 @@ async function saveIndividualCard(){
       if(d.doc_type_id||d.doc_number){
         const{_new,_issued_name,...r}=d;delete r.id;r.individual_id=id;
         if(_issued_name!==undefined)r.issued_by_id=await resolveIssuedById(_issued_name,d.doc_type_id);
+        if(r.date_issue==='')r.date_issue=null;
+        if(r.date_expiration==='')r.date_expiration=null;
+        if(!r.doc_type_id)r.doc_type_id=null;
         docsToSave.push(r);
       }
     }
@@ -2938,9 +2941,9 @@ async function saveIndividualCard(){
     for(const r of docsToSave){
       const res=await post('documents',r);
       const ok=Array.isArray(res)?res[0]?.id:res?.id;
-      if(!ok)failed.push(r);
+      if(!ok)failed.push(res?.message||res?.error||JSON.stringify(res));
     }
-    if(failed.length)alert('⚠️ Не вдалося зберегти '+failed.length+' документ(и). Перевірте, чи заповнені обов\'язкові поля (тип документа тощо), і спробуйте ще раз.');
+    if(failed.length)alert('⚠️ Не вдалося зберегти '+failed.length+' документ(и).\n'+failed.join('\n'));
   }
 
   await delWhere('relatives','individual_id',id);
@@ -3085,6 +3088,9 @@ async function saveNewIndividual(){
       if(d2.doc_type_id||d2.doc_number){
         const{_new,_group,_issued_name,...r}=d2;r.individual_id=newId;
         if(_issued_name)r.issued_by_id=await resolveIssuedById(_issued_name,d2.doc_type_id);
+        if(r.date_issue==='')r.date_issue=null;
+        if(r.date_expiration==='')r.date_expiration=null;
+        if(!r.doc_type_id)r.doc_type_id=null;
         const res=await post('documents',r);
         const ok=Array.isArray(res)?res[0]?.id:res?.id;
         if(!ok)docFailCount++;
