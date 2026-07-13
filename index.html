@@ -3069,9 +3069,32 @@ function openAddIndividual(){
   openModal('add-individual');
 }
 
+function findDuplicateIndividual(rnokpp,surname,name,middleName,excludeId){
+  const rn=(rnokpp||'').trim();
+  if(rn){
+    const dup=DB.individuals.find(x=>x.id!==excludeId&&(x.rnokpp||'').trim()===rn);
+    if(dup)return{type:'rnokpp',person:dup};
+  }
+  const norm=v=>(v||'').trim().toLowerCase();
+  const key=[norm(surname),norm(name),norm(middleName)].join(' ');
+  if(key.trim()){
+    const dup2=DB.individuals.find(x=>x.id!==excludeId&&[norm(x.surname),norm(x.name),norm(x.middle_name)].join(' ')===key);
+    if(dup2)return{type:'pib',person:dup2};
+  }
+  return null;
+}
 async function saveNewIndividual(){
   const sur=document.getElementById('ni-sur').value.trim();
   if(!sur)return alert('Введіть прізвище');
+  const nameV=document.getElementById('ni-name').value.trim();
+  const midV=document.getElementById('ni-mid').value.trim();
+  const rnokppV=document.getElementById('ni-rnokpp').value.trim();
+  const dup=findDuplicateIndividual(rnokppV,sur,nameV,midV);
+  if(dup){
+    const label=dup.type==='rnokpp'?'РНОКПП '+rnokppV:'ПІБ';
+    const ok=confirm('⚠️ Особа з таким '+label+' вже внесена в базу:\n'+fullName(dup.person)+(dup.person.rnokpp?' (РНОКПП: '+dup.person.rnokpp+')':'')+' — ID '+dup.person.id+'.\n\nВсе одно зберегти як нову особу?');
+    if(!ok)return;
+  }
   const btn=document.querySelector('#modal-add-individual .btn-primary');
   btn.disabled=true;btn.textContent='Збереження...';
   try{
