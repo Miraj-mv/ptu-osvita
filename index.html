@@ -1304,11 +1304,17 @@ th.sortable:hover{background:var(--bg)}
 .report-table thead tr th{background:var(--bg);font-weight:600}
 @media print{
   body *{visibility:hidden}
-  #planning-report-body,#planning-report-body *{visibility:visible}
-  #planning-report-body{position:absolute;top:0;left:0;width:100%;max-height:none!important;overflow:visible!important}
+  #planning-report-body,#planning-report-body *,#edbo-print-body,#edbo-print-body *{visibility:visible}
+  #planning-report-body,#edbo-print-body{position:absolute;top:0;left:0;width:100%;max-height:none!important;overflow:visible!important}
   .modal-overlay{position:static!important;background:none!important;padding:0!important}
   .modal{box-shadow:none!important;width:100%!important}
 }
+.edbo-print-section{margin-bottom:18px}
+.edbo-print-section-title{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--accent);background:var(--bg);padding:6px 10px;border-radius:6px;margin-bottom:10px}
+.edbo-print-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px 20px}
+.edbo-print-field{border-bottom:1px solid var(--border);padding-bottom:6px}
+.edbo-print-field-label{font-size:11px;color:var(--muted)}
+.edbo-print-field-value{font-size:13px;font-weight:600;margin-top:2px;min-height:16px}
 .sub-item select{max-width:100%;width:100%;overflow:hidden}
 .form-group{display:flex;flex-direction:column;gap:5px}
 .form-group label{font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
@@ -1785,6 +1791,7 @@ th.sortable:hover{background:var(--bg)}
     <div class="modal-footer">
       <div id="ind-create-info" style="font-size:11px;color:var(--muted)"></div>
       <div style="display:flex;gap:8px">
+        <button class="btn" onclick="openEdboPrintForm()">🖨 Друк форми ЄДЕБО</button>
         <button class="btn" onclick="closeModal('individual')">Скасувати</button>
         <button class="btn btn-primary" onclick="saveIndividualCard()">💾 Зберегти</button>
       </div>
@@ -1970,6 +1977,18 @@ th.sortable:hover{background:var(--bg)}
   <div class="modal-body" id="planning-report-body" style="max-height:75vh;overflow:auto"></div>
 </div></div>
 
+<!-- ДРУК ФОРМИ ЄДЕБО ДЛЯ ОДНІЄЇ ОСОБИ -->
+<div class="modal-overlay" id="modal-edbo-print"><div class="modal" style="width:min(760px,96vw)">
+  <div class="modal-header">
+    <div class="modal-title">🖨 Друк форми ЄДЕБО</div>
+    <div style="display:flex;align-items:center;gap:8px">
+      <button class="btn btn-primary" onclick="window.print()">🖨 Друк</button>
+      <button class="modal-close" onclick="closeModal('edbo-print')">✕</button>
+    </div>
+  </div>
+  <div class="modal-body" id="edbo-print-body" style="max-height:75vh;overflow:auto"></div>
+</div></div>
+
 <!-- ВИБІР ОСОБИ ДЛЯ НАКАЗУ -->
 <div class="modal-overlay" id="modal-person-picker"><div class="modal modal-sm">
   <div class="modal-header"><div class="modal-title">👤 Оберіть осіб</div><button class="modal-close" onclick="closeModal('person-picker')">✕</button></div>
@@ -2092,10 +2111,11 @@ const ORDER_TYPES={1:'📥 Зарахування',2:'📤 Відрахуван�
 const ORDER_STATES={1:{lbl:'Чорновик',cls:'b-gray'},2:{lbl:'Активний',cls:'b-green'},3:{lbl:'Відмінений',cls:'b-red'}};
 
 let session=null;
-let DB={individuals:[],groups:[],subjects:[],teachers:[],years:[],subjectTypes:[],pupils:[],orders:[],orderIndividuals:[],nationalities:[],cities:[],docTypes:[],relTypes:[],groupTypes:[],issuedBy:[]};
+let DB={individuals:[],groups:[],subjects:[],teachers:[],years:[],subjectTypes:[],pupils:[],orders:[],orderIndividuals:[],nationalities:[],cities:[],docTypes:[],relTypes:[],groupTypes:[],issuedBy:[],sexes:[]};
 let grades={};
 let gradeTarget=null;
 let currentIndId=null;
+let currentIndFull=null;
 let indAddresses=[],indDocs=[],indRelatives=[];
 let currentOrderId=null;
 let orderPersons=[]; // {individual_id, _new, id}
@@ -2495,6 +2515,74 @@ async function openPlanningReport(){
   body.innerHTML=html;
 }
 
+// ── ДРУК ФОРМИ ЄДЕБО ДЛЯ ОДНІЄЇ ОСОБИ (порядок полів як у ЄДЕБО) ──
+async function openEdboPrintForm(){
+  if(!currentIndFull){alert('Спочатку відкрийте картку особи');return;}
+  document.getElementById('modal-edbo-print').classList.add('open');
+  const body=document.getElementById('edbo-print-body');
+  const f=currentIndFull;
+
+  if(!DB.sexes||!DB.sexes.length)DB.sexes=await api('dic_sex','?order=id');
+  const sexName=(DB.sexes.find(s=>s.id==f.sex_id)||{}).sex||'';
+
+  const docTypeById=Object.fromEntries(DB.docTypes.map(t=>[t.id,t]));
+  const issuedById=Object.fromEntries(DB.issuedBy.map(t=>[t.id,t]));
+
+  function bestDoc(kind){
+    const docs=indDocs.filter(d=>{
+      const t=docTypeById[d.doc_type_id];
+      if(!t||d.iscanceled)return false;
+      return kind==='osvita'?t.osvita===true:t.identity_documents===true;
+    });
+    if(!docs.length)return null;
+    docs.sort((a,b)=>new Date(b.date_issue||0)-new Date(a.date_issue||0));
+    return docs[0];
+  }
+  const idDoc=bestDoc('identity');
+  const eduDoc=bestDoc('osvita');
+
+  const field=(label,value)=>`<div class="edbo-print-field"><div class="edbo-print-field-label">${label}</div><div class="edbo-print-field-value">${value||'—'}</div></div>`;
+
+  body.innerHTML=`
+  <div style="text-align:center;margin-bottom:16px">
+    <div style="font-size:15px;font-weight:700">Дані фізичної особи для внесення в ЄДЕБО</div>
+    <div style="font-size:12px;color:var(--muted);margin-top:4px">Сформовано: ${new Date().toLocaleString('uk-UA')}</div>
+  </div>
+  <div class="edbo-print-section">
+    <div class="edbo-print-section-title">Персональні дані</div>
+    <div class="edbo-print-grid">
+      ${field('Прізвище',f.surname)}
+      ${field("Ім'я",f.name)}
+      ${field('По батькові',f.middle_name)}
+      ${field('Дата народження',fmtDate(f.date_birth))}
+      ${field('Стать',sexName)}
+      ${field('Громадянство','Україна')}
+    </div>
+  </div>
+  <div class="edbo-print-section">
+    <div class="edbo-print-section-title">Документ, що посвідчує особу</div>
+    ${idDoc?`<div class="edbo-print-grid">
+      ${field('Тип',docTypeById[idDoc.doc_type_id]?.doc_type)}
+      ${field('Номер',[idDoc.doc_serial,idDoc.doc_number].filter(Boolean).join(' '))}
+      ${field('Ким виданий',idDoc.issued_by_id?issuedById[idDoc.issued_by_id]?.issued_name:'')}
+      ${field('Дата видачі',fmtDate(idDoc.date_issue))}
+      ${field('Дійсний до',fmtDate(idDoc.date_expiration))}
+      ${field('УНЗР',f.unzr)}
+      ${field('Примітка','')}
+    </div>`:'<div style="font-size:13px;color:var(--muted)">Документ, що посвідчує особу, не внесено</div>'}
+  </div>
+  <div class="edbo-print-section">
+    <div class="edbo-print-section-title">Документ про освіту</div>
+    ${eduDoc?`<div class="edbo-print-grid">
+      ${field('Тип',docTypeById[eduDoc.doc_type_id]?.doc_type)}
+      ${field('Серія',eduDoc.doc_serial)}
+      ${field('Номер',eduDoc.doc_number)}
+      ${field('Дата видачі',fmtDate(eduDoc.date_issue))}
+      ${field('Ким виданий',eduDoc.issued_by_id?issuedById[eduDoc.issued_by_id]?.issued_name:'')}
+    </div>`:'<div style="font-size:13px;color:var(--muted)">☑ Документ про освіту відсутній</div>'}
+  </div>`;
+}
+
 function populateYearFilter(){
   const yrEl=document.getElementById('filter-ind-year');
   if(!yrEl)return;
@@ -2674,6 +2762,7 @@ async function openIndividualCard(id){
   indDocs=Array.isArray(docs)?docs:[];
   indRelatives=Array.isArray(relatives)?relatives:[];
   const full=(Array.isArray(fullInd)&&fullInd[0])||s;
+  currentIndFull=full;
 
   document.getElementById('ind-avatar').textContent=ini(s.surname,s.name);
   document.getElementById('ind-fullname').textContent=fullName(s);
