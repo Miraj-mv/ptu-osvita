@@ -2580,6 +2580,11 @@ async function openEdboPrintForm(){
       ${field('Дата видачі',fmtDate(eduDoc.date_issue))}
       ${field('Ким виданий',eduDoc.issued_by_id?issuedById[eduDoc.issued_by_id]?.issued_name:'')}
     </div>`:'<div style="font-size:13px;color:var(--muted)">☑ Документ про освіту відсутній</div>'}
+  </div>
+  <div class="edbo-print-section">
+    <div class="edbo-print-grid">
+      ${field('РНОКПП',f.rnokpp)}
+    </div>
   </div>`;
 }
 
