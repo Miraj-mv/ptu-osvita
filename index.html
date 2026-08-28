@@ -1304,8 +1304,8 @@ th.sortable:hover{background:var(--bg)}
 .report-table thead tr th{background:var(--bg);font-weight:600}
 @media print{
   body *{visibility:hidden}
-  #planning-report-body,#planning-report-body *,#edbo-print-body,#edbo-print-body *{visibility:visible}
-  #planning-report-body,#edbo-print-body{position:absolute;top:0;left:0;width:100%;max-height:none!important;overflow:visible!important}
+  #planning-report-body,#planning-report-body *,#edbo-print-body,#edbo-print-body *,#nostatus-report-body,#nostatus-report-body *{visibility:visible}
+  #planning-report-body,#edbo-print-body,#nostatus-report-body{position:absolute;top:0;left:0;width:100%;max-height:none!important;overflow:visible!important}
   .modal-overlay{position:static!important;background:none!important;padding:0!important}
   .modal{box-shadow:none!important;width:100%!important}
 }
@@ -1497,6 +1497,7 @@ th.sortable:hover{background:var(--bg)}
         <div class="page-title">🧑 Фізичні особи</div>
         <div style="display:flex;gap:8px">
           <button class="btn" onclick="openPlanningReport()">📄 Звіт (плановані)</button>
+          <button class="btn" onclick="openNoStatusReport()">📄 Звіт (без статусу)</button>
           <button class="btn btn-primary" onclick="openAddIndividual()">+ Додати особу</button>
         </div>
       </div>
@@ -1987,6 +1988,18 @@ th.sortable:hover{background:var(--bg)}
     </div>
   </div>
   <div class="modal-body" id="edbo-print-body" style="max-height:75vh;overflow:auto"></div>
+</div></div>
+
+<!-- ЗВІТ: ФІЗИЧНІ ОСОБИ БЕЗ СТАТУСУ (НЕ В ЄДЕБО, НЕ НАВЧАЮТЬСЯ) -->
+<div class="modal-overlay" id="modal-nostatus-report"><div class="modal" style="width:min(1100px,96vw)">
+  <div class="modal-header">
+    <div class="modal-title">📄 Звіт: особи без статусу (не в ЄДЕБО, не навчаються)</div>
+    <div style="display:flex;align-items:center;gap:8px">
+      <button class="btn btn-primary" onclick="window.print()">🖨 Друк</button>
+      <button class="modal-close" onclick="closeModal('nostatus-report')">✕</button>
+    </div>
+  </div>
+  <div class="modal-body" id="nostatus-report-body" style="max-height:75vh;overflow:auto"></div>
 </div></div>
 
 <!-- ВИБІР ОСОБИ ДЛЯ НАКАЗУ -->
@@ -2586,6 +2599,54 @@ async function openEdboPrintForm(){
       ${field('РНОКПП',f.rnokpp)}
     </div>
   </div>`;
+}
+
+// ── ЗВІТ: ФІЗИЧНІ ОСОБИ БЕЗ СТАТУСУ (не в ЄДЕБО, не навчаються, без планової групи) ──
+function openNoStatusReport(){
+  document.getElementById('modal-nostatus-report').classList.add('open');
+  const body=document.getElementById('nostatus-report-body');
+
+  const list=DB.individuals.filter(s=>{
+    if(s.is_edbo)return false;
+    if(s.id_group_planning)return false;
+    if(getStudentStatus(s.id)!==null)return false;
+    return true;
+  }).sort((a,b)=>fullName(a).localeCompare(fullName(b),'uk'));
+
+  if(!list.length){
+    body.innerHTML='<div class="empty-state">Немає осіб без статусу — всі або в ЄДЕБО, або мають планову групу, або навчаються</div>';
+    return;
+  }
+
+  let html=`<div class="print-report">
+    <div style="text-align:center;margin-bottom:18px">
+      <div style="font-size:16px;font-weight:700">Звіт: фізичні особи без статусу</div>
+      <div style="font-size:12px;color:var(--muted);margin-top:4px">Не в ЄДЕБО, без планової групи, не навчаються · Сформовано: ${new Date().toLocaleString('uk-UA')}</div>
+    </div>
+    <table class="report-table" style="width:100%;border-collapse:collapse;font-size:12px">
+      <thead><tr>
+        <th style="border:1px solid var(--border);padding:5px">№</th>
+        <th style="border:1px solid var(--border);padding:5px">ПІБ</th>
+        <th style="border:1px solid var(--border);padding:5px">Дата народж.</th>
+        <th style="border:1px solid var(--border);padding:5px">РНОКПП</th>
+        <th style="border:1px solid var(--border);padding:5px">Телефон</th>
+        <th style="border:1px solid var(--border);padding:5px">Дата внесення</th>
+      </tr></thead>
+      <tbody>`;
+  list.forEach((s,idx)=>{
+    html+=`<tr>
+      <td style="border:1px solid var(--border);padding:5px">${idx+1}</td>
+      <td style="border:1px solid var(--border);padding:5px">${fullName(s)}</td>
+      <td style="border:1px solid var(--border);padding:5px;white-space:nowrap">${fmtDate(s.date_birth)}</td>
+      <td style="border:1px solid var(--border);padding:5px;white-space:nowrap">${s.rnokpp||''}</td>
+      <td style="border:1px solid var(--border);padding:5px;white-space:nowrap">${s.phone_number||''}</td>
+      <td style="border:1px solid var(--border);padding:5px;white-space:nowrap">${fmtDate(s.create_time)}</td>
+    </tr>`;
+  });
+  html+=`</tbody></table>
+    <div style="text-align:right;font-size:13px;font-weight:700;margin-top:10px">Всього: ${list.length}</div>
+  </div>`;
+  body.innerHTML=html;
 }
 
 function populateYearFilter(){
