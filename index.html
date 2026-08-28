@@ -1497,7 +1497,7 @@ th.sortable:hover{background:var(--bg)}
         <div class="page-title">🧑 Фізичні особи</div>
         <div style="display:flex;gap:8px">
           <button class="btn" onclick="openPlanningReport()">📄 Звіт (плановані)</button>
-          <button class="btn" onclick="openNoStatusReport()">📄 Звіт (без статусу)</button>
+          <button class="btn" onclick="openNoStatusReport()">📄 Не внесені в ЄДЕБО</button>
           <button class="btn btn-primary" onclick="openAddIndividual()">+ Додати особу</button>
         </div>
       </div>
@@ -1990,10 +1990,10 @@ th.sortable:hover{background:var(--bg)}
   <div class="modal-body" id="edbo-print-body" style="max-height:75vh;overflow:auto"></div>
 </div></div>
 
-<!-- ЗВІТ: ФІЗИЧНІ ОСОБИ БЕЗ СТАТУСУ (НЕ В ЄДЕБО, НЕ НАВЧАЮТЬСЯ) -->
+<!-- ЗВІТ: Є ПЛАНОВА ГРУПА, АЛЕ НЕ ВНЕСЕНІ В ЄДЕБО -->
 <div class="modal-overlay" id="modal-nostatus-report"><div class="modal" style="width:min(1100px,96vw)">
   <div class="modal-header">
-    <div class="modal-title">📄 Звіт: особи без статусу (не в ЄДЕБО, не навчаються)</div>
+    <div class="modal-title">📄 Звіт: є планова група, але не внесені в ЄДЕБО</div>
     <div style="display:flex;align-items:center;gap:8px">
       <button class="btn btn-primary" onclick="window.print()">🖨 Друк</button>
       <button class="modal-close" onclick="closeModal('nostatus-report')">✕</button>
@@ -2608,25 +2608,29 @@ function openNoStatusReport(){
 
   const list=DB.individuals.filter(s=>{
     if(s.is_edbo)return false;
-    if(s.id_group_planning)return false;
-    if(getStudentStatus(s.id)!==null)return false;
+    if(!s.id_group_planning)return false;
     return true;
-  }).sort((a,b)=>fullName(a).localeCompare(fullName(b),'uk'));
+  }).sort((a,b)=>{
+    const ga=DB.groups.find(g=>g.id===a.id_group_planning),gb=DB.groups.find(g=>g.id===b.id_group_planning);
+    const gc=(ga?.group_number||'').localeCompare(gb?.group_number||'',undefined,{numeric:true});
+    return gc||fullName(a).localeCompare(fullName(b),'uk');
+  });
 
   if(!list.length){
-    body.innerHTML='<div class="empty-state">Немає осіб без статусу — всі або в ЄДЕБО, або мають планову групу, або навчаються</div>';
+    body.innerHTML='<div class="empty-state">Немає осіб з плановою групою, які ще не внесені в ЄДЕБО — всі вже внесені 🎉</div>';
     return;
   }
 
   let html=`<div class="print-report">
     <div style="text-align:center;margin-bottom:18px">
-      <div style="font-size:16px;font-weight:700">Звіт: фізичні особи без статусу</div>
-      <div style="font-size:12px;color:var(--muted);margin-top:4px">Не в ЄДЕБО, без планової групи, не навчаються · Сформовано: ${new Date().toLocaleString('uk-UA')}</div>
+      <div style="font-size:16px;font-weight:700">Звіт: є планова група, але не внесені в ЄДЕБО</div>
+      <div style="font-size:12px;color:var(--muted);margin-top:4px">Сформовано: ${new Date().toLocaleString('uk-UA')}</div>
     </div>
     <table class="report-table" style="width:100%;border-collapse:collapse;font-size:12px">
       <thead><tr>
         <th style="border:1px solid var(--border);padding:5px">№</th>
         <th style="border:1px solid var(--border);padding:5px">ПІБ</th>
+        <th style="border:1px solid var(--border);padding:5px">Планова група</th>
         <th style="border:1px solid var(--border);padding:5px">Дата народж.</th>
         <th style="border:1px solid var(--border);padding:5px">РНОКПП</th>
         <th style="border:1px solid var(--border);padding:5px">Телефон</th>
@@ -2634,9 +2638,11 @@ function openNoStatusReport(){
       </tr></thead>
       <tbody>`;
   list.forEach((s,idx)=>{
+    const grp=DB.groups.find(g=>g.id===s.id_group_planning);
     html+=`<tr>
       <td style="border:1px solid var(--border);padding:5px">${idx+1}</td>
       <td style="border:1px solid var(--border);padding:5px">${fullName(s)}</td>
+      <td style="border:1px solid var(--border);padding:5px;white-space:nowrap">Гр. ${grp?.group_number||s.id_group_planning}</td>
       <td style="border:1px solid var(--border);padding:5px;white-space:nowrap">${fmtDate(s.date_birth)}</td>
       <td style="border:1px solid var(--border);padding:5px;white-space:nowrap">${s.rnokpp||''}</td>
       <td style="border:1px solid var(--border);padding:5px;white-space:nowrap">${s.phone_number||''}</td>
