@@ -2124,7 +2124,7 @@ const ORDER_TYPES={1:'📥 Зарахування',2:'📤 Відрахуван�
 const ORDER_STATES={1:{lbl:'Чорновик',cls:'b-gray'},2:{lbl:'Активний',cls:'b-green'},3:{lbl:'Відмінений',cls:'b-red'}};
 
 let session=null;
-let DB={individuals:[],groups:[],subjects:[],teachers:[],years:[],subjectTypes:[],pupils:[],orders:[],orderIndividuals:[],nationalities:[],cities:[],docTypes:[],relTypes:[],groupTypes:[],issuedBy:[],sexes:[]};
+let DB={individuals:[],groups:[],subjects:[],teachers:[],years:[],subjectTypes:[],pupils:[],orders:[],orderIndividuals:[],nationalities:[],cities:[],docTypes:[],relTypes:[],groupTypes:[],issuedBy:[],sexes:[],indDocFlags:{}};
 let grades={};
 let gradeTarget=null;
 let currentIndId=null;
@@ -2192,7 +2192,7 @@ async function startApp(){
 }
 
 async function loadAll(){
-  const [individuals,groups,subjects,teachers,years,subjectTypes,pupils,orders,orderInds,nationalities,cities,docTypes,relTypes,groupTypes,regions,districts,tcs,issuedBy]=await Promise.all([
+  const [individuals,groups,subjects,teachers,years,subjectTypes,pupils,orders,orderInds,nationalities,cities,docTypes,relTypes,groupTypes,regions,districts,tcs,issuedBy,allDocuments]=await Promise.all([
     api('individual','?select=id,surname,name,middle_name,date_birth,rnokpp,phone_number,id_group_planning,unzr,is_edbo,editor_login,edit_time,create_time&order=surname'),
     api('groups','?order=id'),
     api('subjects','?order=subjects_title'),
@@ -2211,6 +2211,7 @@ async function loadAll(){
     api('dic_district','?order=id'),
     api('dic_territorial_community','?order=id'),
     api('dic_issued_by','?order=id'),
+    api('documents','?select=individual_id,doc_type_id,iscanceled&order=individual_id'),
   ]);
   DB.individuals=Array.isArray(individuals)?individuals:[];
   DB.groups=Array.isArray(groups)?groups:[];
@@ -2230,6 +2231,19 @@ async function loadAll(){
   DB.districts=Array.isArray(districts)?districts:[];
   DB.tcs=Array.isArray(tcs)?tcs:[];
   DB.issuedBy=Array.isArray(issuedBy)?issuedBy:[];
+  // Прапорці "має документ, що посвідчує особу" / "має документ про освіту" (для підсвітки в списку)
+  DB.indDocFlags={};
+  {
+    const docTypeById=Object.fromEntries(DB.docTypes.map(t=>[t.id,t]));
+    (Array.isArray(allDocuments)?allDocuments:[]).forEach(d=>{
+      if(d.iscanceled)return;
+      const t=docTypeById[d.doc_type_id];
+      if(!t)return;
+      const f=DB.indDocFlags[d.individual_id]||(DB.indDocFlags[d.individual_id]={identity:false,osvita:false});
+      if(t.identity_documents===true)f.identity=true;
+      if(t.osvita===true)f.osvita=true;
+    });
+  }
   renderIssuedByDatalist();
   renderDashboard();
   populateSelects();
@@ -2672,9 +2686,26 @@ function populateGroupPlanningFilter(){
   el.innerHTML='<option value="">Всі планові групи</option>'+groups.map(g=>`<option value="${g.id}" ${cur==g.id?'selected':''}>Гр. ${g.group_number}</option>`).join('');
 }
 
+function hasIdentityDoc(individualId){return !!(DB.indDocFlags[individualId]&&DB.indDocFlags[individualId].identity);}
+function hasOsvitaDoc(individualId){return !!(DB.indDocFlags[individualId]&&DB.indDocFlags[individualId].osvita);}
+function updateIndDocFlags(individualId,docs){
+  const docTypeById=Object.fromEntries(DB.docTypes.map(t=>[t.id,t]));
+  const f={identity:false,osvita:false};
+  (docs||[]).forEach(d=>{
+    if(d.iscanceled)return;
+    const t=docTypeById[d.doc_type_id];
+    if(!t)return;
+    if(t.identity_documents===true)f.identity=true;
+    if(t.osvita===true)f.osvita=true;
+  });
+  DB.indDocFlags[individualId]=f;
+}
 function getIndRowStyle(s){
   // Визначаємо колір рядка
-  // Пріоритет: навчається (колір групи) > ЄДЕБО (зелений) > звичайний
+  // Пріоритет: немає документа, що посвідчує особу, або немає документа про освіту (яскраво-червоний) > навчається (колір групи) > ЄДЕБО (зелений) > звичайний
+  if(!hasIdentityDoc(s.id)||!hasOsvitaDoc(s.id)){
+    return{bg:'#FEE2E2',border:'2px solid #DC2626',color:'#991B1B'};
+  }
   const pupil=DB.pupils.find(p=>p.id_individual===s.id);
   if(pupil){
     const status=getStudentStatus(s.id);
@@ -2737,6 +2768,10 @@ function renderIndividuals(){
         status==='graduated'?'<span class="badge b-blue" style="font-size:10px">Закінчив</span>':
         status==='planning'?'<span class="badge b-amber" style="font-size:10px">Планує</span>':
         s.is_edbo?'<span class="badge b-green" style="font-size:10px">ЄДЕБО</span>':'—';
+      const missing=[];
+      if(!hasIdentityDoc(s.id))missing.push('немає посвідч. особи');
+      if(!hasOsvitaDoc(s.id))missing.push('немає освіти');
+      const warnBadge=missing.length?`<div><span class="badge" style="font-size:9px;background:#DC2626;color:#fff;white-space:nowrap">⚠ ${missing.join(', ')}</span></div>`:'';
       const rowBg=style.bg!=='transparent'?`style="background:${style.bg};border-bottom:${style.border}"`:'';
       return `<tr class="clickable" ${rowBg} onclick="openIndividualCard(${s.id})">
         <td><div style="display:flex;align-items:center;gap:8px">
@@ -2746,7 +2781,7 @@ function renderIndividuals(){
         <td>${fmt(s.date_birth)}</td>
         <td style="font-family:var(--mono);font-size:12px">${s.rnokpp||'—'}</td>
         <td>${s.phone_number||'—'}</td>
-        <td>${statusBadge}</td>
+        <td>${statusBadge}${warnBadge}</td>
         <td style="font-size:12px;color:var(--muted)">${createYr}</td>
         <td>${edInfo}</td>
         <td onclick="event.stopPropagation()"><button class="btn btn-sm btn-danger" onclick="delIndividual(${s.id})">🗑</button></td>
@@ -3122,6 +3157,7 @@ async function saveIndividualCard(){
       if(!ok)failed.push(res?.message||res?.error||JSON.stringify(res));
     }
     if(failed.length)alert('⚠️ Не вдалося зберегти '+failed.length+' документ(и).\n'+failed.join('\n'));
+    updateIndDocFlags(id,docsToSave);
   }
 
   await delWhere('relatives','individual_id',id);
@@ -3285,6 +3321,7 @@ async function saveNewIndividual(){
     }
     // Зберігаємо документи
     let docFailCount=0;
+    const savedDocs=[];
     for(const d2 of niDocs){
       if(d2.doc_type_id||d2.doc_number){
         const{_new,_group,_issued_name,...r}=d2;r.individual_id=newId;
@@ -3295,9 +3332,11 @@ async function saveNewIndividual(){
         const res=await post('documents',r);
         const ok=Array.isArray(res)?res[0]?.id:res?.id;
         if(!ok)docFailCount++;
+        else savedDocs.push(r);
       }
     }
     if(docFailCount)alert('⚠️ Не вдалося зберегти '+docFailCount+' документ(и) для цієї особи. Відкрийте картку і додайте їх ще раз.');
+    updateIndDocFlags(newId,savedDocs);
     // Зберігаємо родичів
     for(const r of niRelatives){
       if(r.pib||r.telephone){const{_new,...rest}=r;rest.individual_id=newId;await post('relatives',rest);}
