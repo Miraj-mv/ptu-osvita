@@ -1467,6 +1467,7 @@ th.sortable:hover{background:var(--bg)}
     </nav>
     <div class="sb-footer">
       <div class="sb-year" id="sb-year"></div>
+      <button class="btn-logout" id="btn-refresh-data" onclick="refreshAllData()" style="margin-bottom:6px"><span>🔄</span>Оновити дані</button>
       <button class="btn-logout" onclick="doLogout()"><span>🚪</span>Вийти з системи</button>
     </div>
   </div>
@@ -2281,6 +2282,23 @@ function populateSelects(){
 }
 
 // ── NAV ──
+async function refreshAllData(){
+  const btn=document.getElementById('btn-refresh-data');
+  const original=btn.innerHTML;
+  btn.disabled=true;
+  btn.innerHTML='<span>🔄</span>Оновлення…';
+  try{
+    await loadAll();
+    const activePage=document.querySelector('.page.active');
+    const pageId=activePage?activePage.id.replace('p-',''):'dashboard';
+    renderPage(pageId);
+  }catch(e){
+    alert('⚠️ Не вдалося оновити дані: '+e.message);
+  }finally{
+    btn.disabled=false;
+    btn.innerHTML=original;
+  }
+}
 function nav(el,page){
   document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
   document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
