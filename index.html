@@ -2620,9 +2620,16 @@ function openNoStatusReport(){
   document.getElementById('modal-nostatus-report').classList.add('open');
   const body=document.getElementById('nostatus-report-body');
 
+  const q=(document.getElementById('search-ind')?.value||'').toLowerCase();
+  const yr=document.getElementById('filter-ind-year')?.value||'';
+  const grpPlanF=document.getElementById('filter-ind-group-planning')?.value||'';
+
   const list=DB.individuals.filter(s=>{
     if(s.is_edbo)return false;
     if(!s.id_group_planning)return false;
+    if(q&&!fullName(s).toLowerCase().includes(q))return false;
+    if(yr&&(!s.create_time||new Date(s.create_time).getFullYear()!=yr))return false;
+    if(grpPlanF&&s.id_group_planning!=grpPlanF)return false;
     return true;
   }).sort((a,b)=>{
     const ga=DB.groups.find(g=>g.id===a.id_group_planning),gb=DB.groups.find(g=>g.id===b.id_group_planning);
@@ -2630,15 +2637,17 @@ function openNoStatusReport(){
     return gc||fullName(a).localeCompare(fullName(b),'uk');
   });
 
+  const filterNote=[q&&'пошук: "'+q+'"',yr&&'рік: '+yr,grpPlanF&&'група: '+(DB.groups.find(g=>g.id==grpPlanF)?.group_number||grpPlanF)].filter(Boolean).join(' · ');
+
   if(!list.length){
-    body.innerHTML='<div class="empty-state">Немає осіб з плановою групою, які ще не внесені в ЄДЕБО — всі вже внесені 🎉</div>';
+    body.innerHTML=`<div class="empty-state">Немає осіб з плановою групою, які ще не внесені в ЄДЕБО${filterNote?' (за фільтром: '+filterNote+')':''}</div>`;
     return;
   }
 
   let html=`<div class="print-report">
     <div style="text-align:center;margin-bottom:18px">
       <div style="font-size:16px;font-weight:700">Звіт: є планова група, але не внесені в ЄДЕБО</div>
-      <div style="font-size:12px;color:var(--muted);margin-top:4px">Сформовано: ${new Date().toLocaleString('uk-UA')}</div>
+      <div style="font-size:12px;color:var(--muted);margin-top:4px">Сформовано: ${new Date().toLocaleString('uk-UA')}${filterNote?' · '+filterNote:''}</div>
     </div>
     <table class="report-table" style="width:100%;border-collapse:collapse;font-size:12px">
       <thead><tr>
