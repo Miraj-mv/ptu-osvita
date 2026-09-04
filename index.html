@@ -1304,8 +1304,8 @@ th.sortable:hover{background:var(--bg)}
 .report-table thead tr th{background:var(--bg);font-weight:600}
 @media print{
   body *{visibility:hidden}
-  #planning-report-body,#planning-report-body *,#edbo-print-body,#edbo-print-body *,#nostatus-report-body,#nostatus-report-body *{visibility:visible}
-  #planning-report-body,#edbo-print-body,#nostatus-report-body{position:absolute;top:0;left:0;width:100%;max-height:none!important;overflow:visible!important}
+  #planning-report-body,#planning-report-body *,#edbo-print-body,#edbo-print-body *,#nostatus-report-body,#nostatus-report-body *,#status-report-body,#status-report-body *{visibility:visible}
+  #planning-report-body,#edbo-print-body,#nostatus-report-body,#status-report-body{position:absolute;top:0;left:0;width:100%;max-height:none!important;overflow:visible!important}
   .modal-overlay{position:static!important;background:none!important;padding:0!important}
   .modal{box-shadow:none!important;width:100%!important}
 }
@@ -1498,6 +1498,7 @@ th.sortable:hover{background:var(--bg)}
         <div class="page-title">🧑 Фізичні особи</div>
         <div style="display:flex;gap:8px">
           <button class="btn" onclick="openPlanningReport()">📄 Звіт (плановані)</button>
+          <button class="btn" onclick="openStatusBreakdownReport()">📄 Звіт по статусах</button>
           <button class="btn" onclick="openNoStatusReport()">📄 Не внесені в ЄДЕБО</button>
           <button class="btn btn-primary" onclick="openAddIndividual()">+ Додати особу</button>
         </div>
@@ -1979,6 +1980,18 @@ th.sortable:hover{background:var(--bg)}
   <div class="modal-body" id="planning-report-body" style="max-height:75vh;overflow:auto"></div>
 </div></div>
 
+<!-- ЗВІТ: ФІЗИЧНІ ОСОБИ, РОЗБИТІ ПО СТАТУСАХ -->
+<div class="modal-overlay" id="modal-status-report"><div class="modal" style="width:min(1400px,96vw)">
+  <div class="modal-header">
+    <div class="modal-title">📄 Звіт по статусах</div>
+    <div style="display:flex;align-items:center;gap:8px">
+      <button class="btn btn-primary" onclick="window.print()">🖨 Друк</button>
+      <button class="modal-close" onclick="closeModal('status-report')">✕</button>
+    </div>
+  </div>
+  <div class="modal-body" id="status-report-body" style="max-height:75vh;overflow:auto"></div>
+</div></div>
+
 <!-- ДРУК ФОРМИ ЄДЕБО ДЛЯ ОДНІЄЇ ОСОБИ -->
 <div class="modal-overlay" id="modal-edbo-print"><div class="modal" style="width:min(760px,96vw)">
   <div class="modal-header">
@@ -2432,6 +2445,70 @@ function fmtDate(d){
   if(isNaN(dt))return '';
   return String(dt.getDate()).padStart(2,'0')+'.'+String(dt.getMonth()+1).padStart(2,'0')+'.'+dt.getFullYear();
 }
+function buildGroupedPersonsTable(persons,docCell,bestDoc,profCurrentById){
+  const byGroup={};
+  persons.forEach(s=>{(byGroup[s.id_group_planning]=byGroup[s.id_group_planning]||[]).push(s);});
+  const groupIds=Object.keys(byGroup).map(Number).sort((a,b)=>{
+    const ga=DB.groups.find(g=>g.id===a),gb=DB.groups.find(g=>g.id===b);
+    return (ga?.group_number||'').localeCompare(gb?.group_number||'',undefined,{numeric:true});
+  });
+  let total=0,html='';
+  groupIds.forEach(gid=>{
+    const group=DB.groups.find(g=>g.id===gid);
+    const list=byGroup[gid].sort((a,b)=>fullName(a).localeCompare(fullName(b),'uk'));
+    const profNames=[group?.id_profession_1,group?.id_profession_2,group?.id_profession_3]
+      .filter(Boolean).map(pid=>profCurrentById[pid]?.name).filter(Boolean);
+    total+=list.length;
+    html+=`<div class="report-group" style="margin-bottom:24px;break-inside:avoid">
+      <div style="font-weight:700;font-size:13px;margin-bottom:8px;padding:6px 10px;background:var(--bg);border-radius:6px">
+        Група № ${group?.group_number||gid}${profNames.length?', Професія: '+profNames.join(', '):''}
+      </div>
+      <table class="report-table" style="width:100%;border-collapse:collapse;font-size:11px">
+        <thead>
+          <tr>
+            <th rowspan="2" style="border:1px solid var(--border);padding:4px">Дата народж.</th>
+            <th rowspan="2" style="border:1px solid var(--border);padding:4px">П. І. Б.</th>
+            <th rowspan="2" style="border:1px solid var(--border);padding:4px">РНОКПП</th>
+            <th colspan="3" style="border:1px solid var(--border);padding:4px">Документ про освіту</th>
+            <th colspan="5" style="border:1px solid var(--border);padding:4px">Посвідчення особи</th>
+            <th rowspan="2" style="border:1px solid var(--border);padding:4px">УНЗР</th>
+          </tr>
+          <tr>
+            <th style="border:1px solid var(--border);padding:4px">Серія та номер</th>
+            <th style="border:1px solid var(--border);padding:4px">Дата видачі</th>
+            <th style="border:1px solid var(--border);padding:4px">Хто видав</th>
+            <th style="border:1px solid var(--border);padding:4px">Тип</th>
+            <th style="border:1px solid var(--border);padding:4px">Серія/номер</th>
+            <th style="border:1px solid var(--border);padding:4px">Дата видачі</th>
+            <th style="border:1px solid var(--border);padding:4px">Дата закінч.</th>
+            <th style="border:1px solid var(--border);padding:4px">Хто видав</th>
+          </tr>
+        </thead>
+        <tbody>`;
+    list.forEach(s=>{
+      const edu=docCell(bestDoc(s.id,'osvita'));
+      const idd=docCell(bestDoc(s.id,'identity'));
+      html+=`<tr>
+        <td style="border:1px solid var(--border);padding:4px;white-space:nowrap">${fmtDate(s.date_birth)}</td>
+        <td style="border:1px solid var(--border);padding:4px">${fullName(s)}</td>
+        <td style="border:1px solid var(--border);padding:4px;white-space:nowrap">${s.rnokpp||''}</td>
+        <td style="border:1px solid var(--border);padding:4px">${edu.serial}</td>
+        <td style="border:1px solid var(--border);padding:4px;white-space:nowrap">${edu.date}</td>
+        <td style="border:1px solid var(--border);padding:4px">${edu.by}</td>
+        <td style="border:1px solid var(--border);padding:4px">${idd.type}</td>
+        <td style="border:1px solid var(--border);padding:4px">${idd.serial}</td>
+        <td style="border:1px solid var(--border);padding:4px;white-space:nowrap">${idd.date}</td>
+        <td style="border:1px solid var(--border);padding:4px;white-space:nowrap">${idd.end}</td>
+        <td style="border:1px solid var(--border);padding:4px">${idd.by}</td>
+        <td style="border:1px solid var(--border);padding:4px;white-space:nowrap">${s.unzr||''}</td>
+      </tr>`;
+    });
+    html+=`</tbody></table>
+      <div style="text-align:right;font-size:12px;font-weight:600;margin-top:6px">Всього: ${list.length}</div>
+    </div>`;
+  });
+  return{html,total};
+}
 async function openPlanningReport(){
   document.getElementById('modal-planning-report').classList.add('open');
   const body=document.getElementById('planning-report-body');
@@ -2482,82 +2559,104 @@ async function openPlanningReport(){
     if(selectedGroupPlan&&s.id_group_planning!=selectedGroupPlan)return false;
     return true;
   });
-  const byGroup={};
-  planning.forEach(s=>{(byGroup[s.id_group_planning]=byGroup[s.id_group_planning]||[]).push(s);});
-  const groupIds=Object.keys(byGroup).map(Number).sort((a,b)=>{
-    const ga=DB.groups.find(g=>g.id===a),gb=DB.groups.find(g=>g.id===b);
-    return (ga?.group_number||'').localeCompare(gb?.group_number||'',undefined,{numeric:true});
-  });
 
-  if(!groupIds.length){
+  if(!planning.length){
     body.innerHTML=`<div class="empty-state">Немає осіб з плановим зарахуванням${selectedYear?' за '+selectedYear+' рік':''}${selectedGroupPlan?' по обраній групі':''} (поле "Планова група" не заповнене)</div>`;
     return;
   }
 
-  let grandTotal=0;
-  let html=`<div class="print-report">
+  const{html:tableHtml,total:grandTotal}=buildGroupedPersonsTable(planning,docCell,bestDoc,profCurrentById);
+
+  body.innerHTML=`<div class="print-report">
     <div style="text-align:center;margin-bottom:18px">
       <div style="font-size:16px;font-weight:700">Звіт: фізичні особи, які планують навчатися</div>
       <div style="font-size:12px;color:var(--muted);margin-top:4px">Сформовано: ${new Date().toLocaleString('uk-UA')}${selectedYear?' · Рік внесення: '+selectedYear:''}${selectedGroupPlan?' · Група: '+(DB.groups.find(g=>g.id==selectedGroupPlan)?.group_number||selectedGroupPlan):''}</div>
-    </div>`;
+    </div>
+    ${tableHtml}
+    <div style="text-align:right;font-size:13px;font-weight:700;border-top:2px solid var(--text);padding-top:8px">Разом по всіх групах: ${grandTotal}</div>
+  </div>`;
+}
 
-  groupIds.forEach(gid=>{
-    const group=DB.groups.find(g=>g.id===gid);
-    const persons=byGroup[gid].sort((a,b)=>fullName(a).localeCompare(fullName(b),'uk'));
-    const profNames=[group?.id_profession_1,group?.id_profession_2,group?.id_profession_3]
-      .filter(Boolean).map(pid=>profCurrentById[pid]?.name).filter(Boolean);
-    grandTotal+=persons.length;
-    html+=`<div class="report-group" style="margin-bottom:24px;break-inside:avoid">
-      <div style="font-weight:700;font-size:13px;margin-bottom:8px;padding:6px 10px;background:var(--bg);border-radius:6px">
-        Група № ${group?.group_number||gid}${profNames.length?', Професія: '+profNames.join(', '):''}
-      </div>
-      <table class="report-table" style="width:100%;border-collapse:collapse;font-size:11px">
-        <thead>
-          <tr>
-            <th rowspan="2" style="border:1px solid var(--border);padding:4px">Дата народж.</th>
-            <th rowspan="2" style="border:1px solid var(--border);padding:4px">П. І. Б.</th>
-            <th rowspan="2" style="border:1px solid var(--border);padding:4px">РНОКПП</th>
-            <th colspan="3" style="border:1px solid var(--border);padding:4px">Документ про освіту</th>
-            <th colspan="5" style="border:1px solid var(--border);padding:4px">Посвідчення особи</th>
-            <th rowspan="2" style="border:1px solid var(--border);padding:4px">УНЗР</th>
-          </tr>
-          <tr>
-            <th style="border:1px solid var(--border);padding:4px">Серія та номер</th>
-            <th style="border:1px solid var(--border);padding:4px">Дата видачі</th>
-            <th style="border:1px solid var(--border);padding:4px">Хто видав</th>
-            <th style="border:1px solid var(--border);padding:4px">Тип</th>
-            <th style="border:1px solid var(--border);padding:4px">Серія/номер</th>
-            <th style="border:1px solid var(--border);padding:4px">Дата видачі</th>
-            <th style="border:1px solid var(--border);padding:4px">Дата закінч.</th>
-            <th style="border:1px solid var(--border);padding:4px">Хто видав</th>
-          </tr>
-        </thead>
-        <tbody>`;
-    persons.forEach(s=>{
-      const edu=docCell(bestDoc(s.id,'osvita'));
-      const idd=docCell(bestDoc(s.id,'identity'));
-      html+=`<tr>
-        <td style="border:1px solid var(--border);padding:4px;white-space:nowrap">${fmtDate(s.date_birth)}</td>
-        <td style="border:1px solid var(--border);padding:4px">${fullName(s)}</td>
-        <td style="border:1px solid var(--border);padding:4px;white-space:nowrap">${s.rnokpp||''}</td>
-        <td style="border:1px solid var(--border);padding:4px">${edu.serial}</td>
-        <td style="border:1px solid var(--border);padding:4px;white-space:nowrap">${edu.date}</td>
-        <td style="border:1px solid var(--border);padding:4px">${edu.by}</td>
-        <td style="border:1px solid var(--border);padding:4px">${idd.type}</td>
-        <td style="border:1px solid var(--border);padding:4px">${idd.serial}</td>
-        <td style="border:1px solid var(--border);padding:4px;white-space:nowrap">${idd.date}</td>
-        <td style="border:1px solid var(--border);padding:4px;white-space:nowrap">${idd.end}</td>
-        <td style="border:1px solid var(--border);padding:4px">${idd.by}</td>
-        <td style="border:1px solid var(--border);padding:4px;white-space:nowrap">${s.unzr||''}</td>
-      </tr>`;
+// ── ЗВІТ ПО СТАТУСАХ: навчаються / внесені в ЄДЕБО / не внесені в ЄДЕБО ──
+async function openStatusBreakdownReport(){
+  document.getElementById('modal-status-report').classList.add('open');
+  const body=document.getElementById('status-report-body');
+  body.innerHTML='<div class="empty-state">Завантаження…</div>';
+  const selectedYear=document.getElementById('filter-ind-year')?.value||'';
+  const selectedGroupPlan=document.getElementById('filter-ind-group-planning')?.value||'';
+  const q=(document.getElementById('search-ind')?.value||'').toLowerCase();
+
+  const [allDocs,professionsCurrent,docTypes,issuedBy]=await Promise.all([
+    api('documents','?order=individual_id'),
+    api('professions_current','?order=id'),
+    DB.docTypes.length?Promise.resolve(DB.docTypes):api('dic_doctype','?order=id'),
+    DB.issuedBy.length?Promise.resolve(DB.issuedBy):api('dic_issued_by','?order=id'),
+  ]);
+  const docTypeById=Object.fromEntries((docTypes||[]).map(t=>[t.id,t]));
+  const issuedById=Object.fromEntries((issuedBy||[]).map(t=>[t.id,t]));
+  const profCurrentById=Object.fromEntries((professionsCurrent||[]).map(p=>[p.id,p]));
+  const docsByInd={};
+  (allDocs||[]).forEach(d=>{(docsByInd[d.individual_id]=docsByInd[d.individual_id]||[]).push(d);});
+
+  function bestDoc(individualId,kind){
+    const docs=(docsByInd[individualId]||[]).filter(d=>{
+      const t=docTypeById[d.doc_type_id];
+      if(!t)return false;
+      if(d.iscanceled)return false;
+      return kind==='osvita'?t.osvita===true:t.identity_documents===true;
     });
-    html+=`</tbody></table>
-      <div style="text-align:right;font-size:12px;font-weight:600;margin-top:6px">Всього: ${persons.length}</div>
-    </div>`;
+    if(!docs.length)return null;
+    docs.sort((a,b)=>new Date(b.date_issue||0)-new Date(a.date_issue||0));
+    return docs[0];
+  }
+  function docCell(d){
+    if(!d)return {type:'—',serial:'',date:'',end:'',by:''};
+    const t=docTypeById[d.doc_type_id];
+    const by=d.issued_by_id?(issuedById[d.issued_by_id]?.issued_name||''):'';
+    return {type:t?t.doc_type:'',serial:[d.doc_serial,d.doc_number].filter(Boolean).join(' ').trim(),date:fmtDate(d.date_issue),end:fmtDate(d.date_expiration),by};
+  }
+
+  const base=DB.individuals.filter(s=>{
+    if(!s.id_group_planning)return false;
+    if(selectedYear&&(!s.create_time||new Date(s.create_time).getFullYear()!=selectedYear))return false;
+    if(selectedGroupPlan&&s.id_group_planning!=selectedGroupPlan)return false;
+    if(q&&!fullName(s).toLowerCase().includes(q))return false;
+    return true;
   });
 
-  html+=`<div style="text-align:right;font-size:13px;font-weight:700;border-top:2px solid var(--text);padding-top:8px">Разом по всіх групах: ${grandTotal}</div></div>`;
-  body.innerHTML=html;
+  if(!base.length){
+    body.innerHTML='<div class="empty-state">Немає осіб з плановим зарахуванням за обраними фільтрами</div>';
+    return;
+  }
+
+  const studying=[],edbo=[],notEdbo=[];
+  base.forEach(s=>{
+    if(getStudentStatus(s.id)==='studying')studying.push(s);
+    else if(s.is_edbo)edbo.push(s);
+    else notEdbo.push(s);
+  });
+
+  const filterNote=[q&&'пошук: "'+q+'"',selectedYear&&'рік: '+selectedYear,selectedGroupPlan&&'група: '+(DB.groups.find(g=>g.id==selectedGroupPlan)?.group_number||selectedGroupPlan)].filter(Boolean).join(' · ');
+
+  const section=(title,color,persons)=>{
+    if(!persons.length)return `<div class="edbo-print-section"><div class="edbo-print-section-title" style="color:${color}">${title} (0)</div><div style="font-size:13px;color:var(--muted);padding:6px 10px">Немає осіб у цій категорії</div></div>`;
+    const{html,total}=buildGroupedPersonsTable(persons,docCell,bestDoc,profCurrentById);
+    return `<div class="edbo-print-section" style="break-before:page">
+      <div class="edbo-print-section-title" style="color:${color}">${title} (${total})</div>
+      ${html}
+    </div>`;
+  };
+
+  body.innerHTML=`<div class="print-report">
+    <div style="text-align:center;margin-bottom:18px">
+      <div style="font-size:16px;font-weight:700">Звіт по статусах</div>
+      <div style="font-size:12px;color:var(--muted);margin-top:4px">Сформовано: ${new Date().toLocaleString('uk-UA')}${filterNote?' · '+filterNote:''}</div>
+    </div>
+    ${section('🎓 Навчаються','#16A34A',studying)}
+    ${section('✅ Внесені в ЄДЕБО','#4F46E5',edbo)}
+    ${section('⚠ Не внесені в ЄДЕБО','#DC2626',notEdbo)}
+    <div style="text-align:right;font-size:13px;font-weight:700;border-top:2px solid var(--text);padding-top:8px">Разом по всіх статусах: ${base.length}</div>
+  </div>`;
 }
 
 // ── ДРУК ФОРМИ ЄДЕБО ДЛЯ ОДНІЄЇ ОСОБИ (порядок полів як у ЄДЕБО) ──
