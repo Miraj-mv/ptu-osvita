@@ -2638,24 +2638,87 @@ async function openStatusBreakdownReport(){
 
   const filterNote=[q&&'пошук: "'+q+'"',selectedYear&&'рік: '+selectedYear,selectedGroupPlan&&'група: '+(DB.groups.find(g=>g.id==selectedGroupPlan)?.group_number||selectedGroupPlan)].filter(Boolean).join(' · ');
 
-  const section=(title,color,persons)=>{
-    if(!persons.length)return `<div class="edbo-print-section"><div class="edbo-print-section-title" style="color:${color}">${title} (0)</div><div style="font-size:13px;color:var(--muted);padding:6px 10px">Немає осіб у цій категорії</div></div>`;
-    const{html,total}=buildGroupedPersonsTable(persons,docCell,bestDoc,profCurrentById);
-    return `<div class="edbo-print-section" style="break-before:page">
-      <div class="edbo-print-section-title" style="color:${color}">${title} (${total})</div>
-      ${html}
-    </div>`;
+  const statusMeta={
+    studying:{label:'🎓 Навчається',color:'#16A34A',bg:'#F0FDF4'},
+    edbo:{label:'✅ В ЄДЕБО',color:'#4F46E5',bg:'#EEF2FF'},
+    notEdbo:{label:'⚠ Не в ЄДЕБО',color:'#DC2626',bg:'#FEF2F2'}
   };
+  const sortByGroupThenName=arr=>arr.sort((a,b)=>{
+    const ga=DB.groups.find(g=>g.id===a.id_group_planning),gb=DB.groups.find(g=>g.id===b.id_group_planning);
+    const gc=(ga?.group_number||'').localeCompare(gb?.group_number||'',undefined,{numeric:true});
+    return gc||fullName(a).localeCompare(fullName(b),'uk');
+  });
+  const rows=[
+    ...sortByGroupThenName(studying).map(s=>({s,statusKey:'studying'})),
+    ...sortByGroupThenName(edbo).map(s=>({s,statusKey:'edbo'})),
+    ...sortByGroupThenName(notEdbo).map(s=>({s,statusKey:'notEdbo'})),
+  ];
+
+  let tbody='';
+  rows.forEach((row,idx)=>{
+    const s=row.s;
+    const meta=statusMeta[row.statusKey];
+    const group=DB.groups.find(g=>g.id===s.id_group_planning);
+    const profNames=[group?.id_profession_1,group?.id_profession_2,group?.id_profession_3]
+      .filter(Boolean).map(pid=>profCurrentById[pid]?.name).filter(Boolean);
+    const edu=docCell(bestDoc(s.id,'osvita'));
+    const idd=docCell(bestDoc(s.id,'identity'));
+    tbody+=`<tr style="background:${meta.bg}">
+      <td style="border:1px solid var(--border);padding:4px">${idx+1}</td>
+      <td style="border:1px solid var(--border);padding:4px;white-space:nowrap;color:${meta.color};font-weight:600">${meta.label}</td>
+      <td style="border:1px solid var(--border);padding:4px;white-space:nowrap" title="${profNames.join(', ')}">Гр. ${group?.group_number||s.id_group_planning}</td>
+      <td style="border:1px solid var(--border);padding:4px;white-space:nowrap">${fmtDate(s.date_birth)}</td>
+      <td style="border:1px solid var(--border);padding:4px">${fullName(s)}</td>
+      <td style="border:1px solid var(--border);padding:4px;white-space:nowrap">${s.rnokpp||''}</td>
+      <td style="border:1px solid var(--border);padding:4px">${edu.serial}</td>
+      <td style="border:1px solid var(--border);padding:4px;white-space:nowrap">${edu.date}</td>
+      <td style="border:1px solid var(--border);padding:4px">${edu.by}</td>
+      <td style="border:1px solid var(--border);padding:4px">${idd.type}</td>
+      <td style="border:1px solid var(--border);padding:4px">${idd.serial}</td>
+      <td style="border:1px solid var(--border);padding:4px;white-space:nowrap">${idd.date}</td>
+      <td style="border:1px solid var(--border);padding:4px;white-space:nowrap">${idd.end}</td>
+      <td style="border:1px solid var(--border);padding:4px">${idd.by}</td>
+      <td style="border:1px solid var(--border);padding:4px;white-space:nowrap">${s.unzr||''}</td>
+    </tr>`;
+  });
 
   body.innerHTML=`<div class="print-report">
     <div style="text-align:center;margin-bottom:18px">
       <div style="font-size:16px;font-weight:700">Звіт по статусах</div>
       <div style="font-size:12px;color:var(--muted);margin-top:4px">Сформовано: ${new Date().toLocaleString('uk-UA')}${filterNote?' · '+filterNote:''}</div>
+      <div style="font-size:12px;margin-top:6px">
+        <span style="color:${statusMeta.studying.color};font-weight:600">${statusMeta.studying.label}: ${studying.length}</span> ·
+        <span style="color:${statusMeta.edbo.color};font-weight:600">${statusMeta.edbo.label}: ${edbo.length}</span> ·
+        <span style="color:${statusMeta.notEdbo.color};font-weight:600">${statusMeta.notEdbo.label}: ${notEdbo.length}</span>
+      </div>
     </div>
-    ${section('🎓 Навчаються','#16A34A',studying)}
-    ${section('✅ Внесені в ЄДЕБО','#4F46E5',edbo)}
-    ${section('⚠ Не внесені в ЄДЕБО','#DC2626',notEdbo)}
-    <div style="text-align:right;font-size:13px;font-weight:700;border-top:2px solid var(--text);padding-top:8px">Разом по всіх статусах: ${base.length}</div>
+    <table class="report-table" style="width:100%;border-collapse:collapse;font-size:10.5px">
+      <thead>
+        <tr>
+          <th rowspan="2" style="border:1px solid var(--border);padding:4px">№</th>
+          <th rowspan="2" style="border:1px solid var(--border);padding:4px">Статус</th>
+          <th rowspan="2" style="border:1px solid var(--border);padding:4px">Група</th>
+          <th rowspan="2" style="border:1px solid var(--border);padding:4px">Дата народж.</th>
+          <th rowspan="2" style="border:1px solid var(--border);padding:4px">П. І. Б.</th>
+          <th rowspan="2" style="border:1px solid var(--border);padding:4px">РНОКПП</th>
+          <th colspan="3" style="border:1px solid var(--border);padding:4px">Документ про освіту</th>
+          <th colspan="5" style="border:1px solid var(--border);padding:4px">Посвідчення особи</th>
+          <th rowspan="2" style="border:1px solid var(--border);padding:4px">УНЗР</th>
+        </tr>
+        <tr>
+          <th style="border:1px solid var(--border);padding:4px">Серія та номер</th>
+          <th style="border:1px solid var(--border);padding:4px">Дата видачі</th>
+          <th style="border:1px solid var(--border);padding:4px">Хто видав</th>
+          <th style="border:1px solid var(--border);padding:4px">Тип</th>
+          <th style="border:1px solid var(--border);padding:4px">Серія/номер</th>
+          <th style="border:1px solid var(--border);padding:4px">Дата видачі</th>
+          <th style="border:1px solid var(--border);padding:4px">Дата закінч.</th>
+          <th style="border:1px solid var(--border);padding:4px">Хто видав</th>
+        </tr>
+      </thead>
+      <tbody>${tbody}</tbody>
+    </table>
+    <div style="text-align:right;font-size:13px;font-weight:700;border-top:2px solid var(--text);padding-top:8px;margin-top:8px">Разом: ${rows.length}</div>
   </div>`;
 }
 
