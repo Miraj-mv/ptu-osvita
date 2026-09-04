@@ -1460,6 +1460,7 @@ th.sortable:hover{background:var(--bg)}
       <div class="nav-item" data-section="teachers" onclick="nav(this,'teachers')"><span class="ni">👩‍🏫</span>Викладачі</div>
       <div class="nav-item" data-section="journal" onclick="nav(this,'journal')"><span class="ni">📋</span>Журнал оцінок</div>
       <div class="nav-item" data-section="orders" onclick="nav(this,'orders')"><span class="ni">📄</span>Накази</div>
+      <div class="nav-item" data-section="controls" onclick="nav(this,'controls')"><span class="ni">🎯</span>Контролі</div>
       <div class="nav-item" data-section="dicts" onclick="nav(this,'dicts')"><span class="ni">📖</span>Довідники</div>
       <div class="nav-item" data-section="users" onclick="nav(this,'users')"><span class="ni">👥</span>Користувачі</div>
       <div class="nav-item" data-section="permissions" onclick="nav(this,'permissions')"><span class="ni">🔐</span>Доступи</div>
@@ -1629,6 +1630,18 @@ th.sortable:hover{background:var(--bg)}
         <div id="otab-active" class="tab-content" style="padding:16px"><div id="orders-active"></div></div>
         <div id="otab-cancelled" class="tab-content" style="padding:16px"><div id="orders-cancelled"></div></div>
       </div>
+    </div>
+    <!-- КОНТРОЛІ -->
+    <div class="page" id="p-controls">
+      <div class="page-header">
+        <div class="page-title">🎯 Контролі</div>
+        <div style="display:flex;gap:8px;align-items:center">
+          <span id="controls-attention-badge" style="display:none;font-size:12px;font-weight:600;color:#DC2626;background:#FEE2E2;padding:5px 10px;border-radius:8px">⚠ 0 потребують уваги</span>
+          <button class="btn" onclick="requestControlNotifications()">🔔 Увімкнути сповіщення</button>
+          <button class="btn btn-primary" onclick="openAddControl()">+ Додати контроль</button>
+        </div>
+      </div>
+      <div id="controls-list"></div>
     </div>
     <!-- ЗВІТИ -->
     <div class="page" id="p-reports">
@@ -2016,6 +2029,61 @@ th.sortable:hover{background:var(--bg)}
   <div class="modal-body" id="nostatus-report-body" style="max-height:75vh;overflow:auto"></div>
 </div></div>
 
+<!-- КОНТРОЛЬ: ДОДАВАННЯ/РЕДАГУВАННЯ -->
+<div class="modal-overlay" id="modal-control"><div class="modal" style="width:min(640px,96vw)">
+  <div class="modal-header">
+    <div class="modal-title" id="ctl-modal-title">🎯 Новий контроль</div>
+    <button class="modal-close" onclick="closeModal('control')">✕</button>
+  </div>
+  <div class="modal-body">
+    <div class="form-group" style="margin-bottom:12px"><label>Назва *</label><input type="text" id="ctl-title" placeholder="Напр. Здача звіту по відвідуваності"></div>
+    <div class="form-group" style="margin-bottom:12px"><label>Опис</label><textarea id="ctl-description" rows="2" placeholder="Необов'язково"></textarea></div>
+    <div class="form-grid" style="margin-bottom:12px">
+      <div class="form-group"><label>Періодичність</label>
+        <select id="ctl-period-type" onchange="onControlPeriodTypeChange()">
+          <option value="once">Одноразово</option>
+          <option value="weekly">Щотижня</option>
+          <option value="monthly">Щомісяця</option>
+        </select>
+      </div>
+      <div id="ctl-period-fields"></div>
+    </div>
+    <div class="form-grid" style="margin-bottom:12px">
+      <div class="form-group"><label>До якої години *</label><input type="time" id="ctl-deadline-time" value="18:00"></div>
+      <div class="form-group"><label>Нагадати за (хв до дедлайну)</label><input type="number" id="ctl-reminder" min="0" value="60"></div>
+    </div>
+    <div class="form-group" style="margin-bottom:12px">
+      <label>Відповідальний</label>
+      <input type="text" id="ctl-responsible" list="control-users-datalist" placeholder="Оберіть користувача або впишіть ПІБ">
+      <datalist id="control-users-datalist"></datalist>
+    </div>
+    <div class="form-group">
+      <label>Файли / посилання контролю</label>
+      <div id="ctl-files-list" style="margin-bottom:8px"></div>
+      <div style="display:flex;gap:8px">
+        <input type="file" multiple onchange="addControlFileUpload(this)" style="flex:1">
+        <button class="btn btn-sm" onclick="addControlFileLink()">🔗 Додати посилання</button>
+      </div>
+    </div>
+  </div>
+  <div class="modal-footer">
+    <div></div>
+    <div style="display:flex;gap:8px">
+      <button class="btn" onclick="closeModal('control')">Скасувати</button>
+      <button class="btn btn-primary" onclick="saveControl()">💾 Зберегти</button>
+    </div>
+  </div>
+</div></div>
+
+<!-- КОНТРОЛЬ: ДЕТАЛІ ТА ВИКОНАННЯ -->
+<div class="modal-overlay" id="modal-control-detail"><div class="modal" style="width:min(680px,96vw)">
+  <div class="modal-header">
+    <div class="modal-title" id="ctld-title">🎯 Контроль</div>
+    <button class="modal-close" onclick="closeModal('control-detail')">✕</button>
+  </div>
+  <div class="modal-body" id="ctld-body" style="max-height:75vh;overflow:auto"></div>
+</div></div>
+
 <!-- ВИБІР ОСОБИ ДЛЯ НАКАЗУ -->
 <div class="modal-overlay" id="modal-person-picker"><div class="modal modal-sm">
   <div class="modal-header"><div class="modal-title">👤 Оберіть осіб</div><button class="modal-close" onclick="closeModal('person-picker')">✕</button></div>
@@ -2138,7 +2206,7 @@ const ORDER_TYPES={1:'📥 Зарахування',2:'📤 Відрахуван�
 const ORDER_STATES={1:{lbl:'Чорновик',cls:'b-gray'},2:{lbl:'Активний',cls:'b-green'},3:{lbl:'Відмінений',cls:'b-red'}};
 
 let session=null;
-let DB={individuals:[],groups:[],subjects:[],teachers:[],years:[],subjectTypes:[],pupils:[],orders:[],orderIndividuals:[],nationalities:[],cities:[],docTypes:[],relTypes:[],groupTypes:[],issuedBy:[],sexes:[],indDocFlags:{}};
+let DB={individuals:[],groups:[],subjects:[],teachers:[],years:[],subjectTypes:[],pupils:[],orders:[],orderIndividuals:[],nationalities:[],cities:[],docTypes:[],relTypes:[],groupTypes:[],issuedBy:[],sexes:[],indDocFlags:{},controls:[],controlFiles:[],controlCompletions:[],controlCompletionFiles:[],users:[],controlsLoaded:false};
 let grades={};
 let gradeTarget=null;
 let currentIndId=null;
@@ -2295,6 +2363,381 @@ function populateSelects(){
 }
 
 // ── NAV ──
+// ══════════════════ КОНТРОЛІ ══════════════════
+const WEEKDAY_NAMES=['Нд','Пн','Вт','Ср','Чт','Пт','Сб'];
+const WEEKDAY_NAMES_NOM=['Неділя','Понеділок','Вівторок','Середа','Четвер','Пʼятниця','Субота'];
+const WEEKDAY_NAMES_GEN=['неділі','понеділка','вівторка','середи','четверга','пʼятниці','суботи'];
+let controlNotified=new Set(); // щоб не дублювати сповіщення в межах сесії
+
+async function uploadControlFile(file,subfolder){
+  const path=`${subfolder}/${Date.now()}_${file.name}`.replace(/\s+/g,'_');
+  const r=await fetch(`${SB}/storage/v1/object/control-files/${path}`,{
+    method:'POST',
+    headers:{'apikey':KEY,'Authorization':'Bearer '+KEY,'Content-Type':file.type||'application/octet-stream'},
+    body:file
+  });
+  if(!r.ok)throw new Error('Не вдалося завантажити файл '+file.name);
+  return `${SB}/storage/v1/object/public/control-files/${path}`;
+}
+
+async function loadControlsData(){
+  if(DB.controlsLoaded)return;
+  const [controls,files,completions,compFiles,users]=await Promise.all([
+    api('controls','?order=id'),
+    api('control_files','?order=id'),
+    api('control_completions','?order=id'),
+    api('control_completion_files','?order=id'),
+    DB.users.length?Promise.resolve(DB.users):api('dic_users','?select=login,initials'),
+  ]);
+  DB.controls=Array.isArray(controls)?controls:[];
+  DB.controlFiles=Array.isArray(files)?files:[];
+  DB.controlCompletions=Array.isArray(completions)?completions:[];
+  DB.controlCompletionFiles=Array.isArray(compFiles)?compFiles:[];
+  DB.users=Array.isArray(users)?users:[];
+  DB.controlsLoaded=true;
+  const dl=document.getElementById('control-users-datalist');
+  if(dl)dl.innerHTML=DB.users.map(u=>`<option value="${u.login}">${(u.initials||u.login).replace(/"/g,'&quot;')}</option>`).join('');
+}
+
+// Визначає поточний період контролю відносно refDate: {periodLabel, deadline}
+function computeControlPeriod(control,refDate){
+  refDate=refDate||new Date();
+  const [hh,mm]=(control.deadline_time||'18:00:00').split(':').map(Number);
+  if(control.period_type==='once'){
+    if(!control.once_date)return null;
+    const d=new Date(control.once_date+'T00:00:00');
+    const deadline=new Date(d);deadline.setHours(hh,mm||0,0,0);
+    return{periodLabel:control.once_date,deadline,periodStartText:'Одноразово: '+fmtDate(control.once_date)};
+  }
+  if(control.period_type==='weekly'){
+    const wd=control.weekday!=null?control.weekday:5;
+    const d=new Date(refDate);
+    const diff=(d.getDay()-wd+7)%7;
+    d.setDate(d.getDate()-diff);
+    d.setHours(0,0,0,0);
+    const periodLabel=d.toISOString().slice(0,10);
+    const deadline=new Date(d);deadline.setHours(hh,mm||0,0,0);
+    return{periodLabel,deadline,periodStartText:'Щотижня, до '+WEEKDAY_NAMES_GEN[wd]};
+  }
+  if(control.period_type==='monthly'){
+    const dom=control.day_of_month||1;
+    const y=refDate.getFullYear(),m=refDate.getMonth();
+    const lastDay=new Date(y,m+1,0).getDate();
+    const day=Math.min(dom,lastDay);
+    const deadline=new Date(y,m,day,hh,mm||0,0,0);
+    const periodLabel=`${y}-${String(m+1).padStart(2,'0')}`;
+    return{periodLabel,deadline,periodStartText:'Щомісяця, до '+dom+' числа'};
+  }
+  return null;
+}
+function isControlDone(control,periodLabel){
+  return DB.controlCompletions.some(c=>c.control_id===control.id&&c.period_label===periodLabel);
+}
+function responsibleLabel(control){
+  if(control.responsible_login){
+    const u=DB.users.find(x=>x.login===control.responsible_login);
+    return u?u.initials||u.login:control.responsible_login;
+  }
+  return control.responsible_text||'—';
+}
+function fmtTime(t){return t?t.slice(0,5):'';}
+
+function renderControls(){
+  const listEl=document.getElementById('controls-list');
+  listEl.innerHTML='<div class="empty-state">Завантаження…</div>';
+  loadControlsData().then(()=>{
+    const now=new Date();
+    const rows=DB.controls.filter(c=>c.is_active!==false).map(c=>{
+      const period=computeControlPeriod(c,now);
+      const done=period?isControlDone(c,period.periodLabel):false;
+      const overdue=period&&!done&&now>period.deadline;
+      const dueSoon=period&&!done&&!overdue&&(period.deadline-now)<=(c.reminder_minutes_before||60)*60000;
+      return{c,period,done,overdue,dueSoon};
+    }).sort((a,b)=>{
+      if(a.overdue!==b.overdue)return a.overdue?-1:1;
+      if(a.dueSoon!==b.dueSoon)return a.dueSoon?-1:1;
+      return (a.period?.deadline||0)-(b.period?.deadline||0);
+    });
+
+    const attentionCount=rows.filter(r=>r.overdue||r.dueSoon).length;
+    const badge=document.getElementById('controls-attention-badge');
+    if(attentionCount){badge.style.display='inline-block';badge.textContent=`⚠ ${attentionCount} потребують уваги`;}
+    else badge.style.display='none';
+
+    if(!rows.length){
+      listEl.innerHTML='<div class="empty-state">Контролів ще немає. Натисніть "+ Додати контроль", щоб створити перший.</div>';
+      return;
+    }
+
+    listEl.innerHTML=`<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:14px">
+      ${rows.map(({c,period,done,overdue,dueSoon})=>{
+        const style=overdue?{bg:'#FEE2E2',border:'#DC2626',txt:'#991B1B'}:dueSoon?{bg:'#FFFBEB',border:'#D97706',txt:'#92400E'}:done?{bg:'#F0FDF4',border:'#16A34A',txt:'#166534'}:{bg:'#fff',border:'var(--border)',txt:'var(--text)'};
+        const periodTxt=period?period.periodStartText:'Період не налаштовано';
+        const deadlineTxt=period?fmtDate(period.deadline.toISOString().slice(0,10))+' до '+fmtTime(c.deadline_time):'';
+        const statusTxt=done?'✅ Виконано':overdue?'⚠ Прострочено':dueSoon?'⏳ Наближається дедлайн':'🕐 В процесі';
+        return `<div class="card" style="padding:14px;border:1.5px solid ${style.border};background:${style.bg};cursor:pointer" onclick="openControlDetail(${c.id})">
+          <div style="display:flex;justify-content:space-between;align-items:start;gap:8px">
+            <div style="font-weight:700;font-size:14px;color:${style.txt}">${c.title}</div>
+            <div style="display:flex;gap:4px" onclick="event.stopPropagation()">
+              <button class="btn btn-sm" onclick="openEditControl(${c.id})" title="Редагувати">✏️</button>
+              <button class="btn btn-sm btn-danger" onclick="deleteControl(${c.id})" title="Видалити">🗑</button>
+            </div>
+          </div>
+          <div style="font-size:12px;color:var(--muted);margin-top:6px">${periodTxt}</div>
+          ${period?`<div style="font-size:12px;color:${style.txt};font-weight:600;margin-top:2px">До: ${deadlineTxt}</div>`:''}
+          <div style="font-size:12px;color:var(--muted);margin-top:6px">👤 ${responsibleLabel(c)}</div>
+          <div style="margin-top:10px;font-size:12px;font-weight:700;color:${style.txt}">${statusTxt}</div>
+        </div>`;
+      }).join('')}
+    </div>`;
+
+    checkControlReminders(rows);
+  });
+}
+
+function checkControlReminders(rows){
+  if(!('Notification' in window)||Notification.permission!=='granted')return;
+  rows.forEach(({c,period,done,overdue,dueSoon})=>{
+    if(!period||done)return;
+    if(!(overdue||dueSoon))return;
+    const key=c.id+'::'+period.periodLabel+'::'+(overdue?'overdue':'due');
+    if(controlNotified.has(key))return;
+    controlNotified.add(key);
+    new Notification(overdue?'⚠ Прострочений контроль':'⏳ Наближається дедлайн контролю',{
+      body:c.title+' — до '+fmtTime(c.deadline_time),
+      tag:key
+    });
+  });
+}
+async function requestControlNotifications(){
+  if(!('Notification' in window)){alert('Ваш браузер не підтримує сповіщення');return;}
+  const perm=await Notification.requestPermission();
+  if(perm==='granted'){alert('✅ Сповіщення увімкнено. Поки ця вкладка відкрита, ви отримуватимете нагадування про контролі.');renderControls();}
+  else alert('Сповіщення не дозволені. Увімкнути можна в налаштуваннях браузера для цього сайту.');
+}
+setInterval(()=>{
+  if(document.getElementById('p-controls')?.classList.contains('active')){
+    const now=new Date();
+    const rows=DB.controls.filter(c=>c.is_active!==false).map(c=>{
+      const period=computeControlPeriod(c,now);
+      const done=period?isControlDone(c,period.periodLabel):false;
+      const overdue=period&&!done&&now>period.deadline;
+      const dueSoon=period&&!done&&!overdue&&(period.deadline-now)<=(c.reminder_minutes_before||60)*60000;
+      return{c,period,done,overdue,dueSoon};
+    });
+    checkControlReminders(rows);
+  }
+},60000);
+
+// ── Форма додавання/редагування контролю ──
+let controlDraftFiles=[]; // {file_name,file_url,is_link,_new}
+let editingControlId=null;
+function periodFieldsHtml(type,weekday,dayOfMonth,onceDate){
+  if(type==='weekly'){
+    return `<div class="form-group"><label>День тижня</label>
+      <select id="ctl-weekday">${WEEKDAY_NAMES_NOM.map((w,i)=>`<option value="${i}" ${weekday==i?'selected':''}>${w}</option>`).join('')}</select>
+    </div>`;
+  }
+  if(type==='monthly'){
+    return `<div class="form-group"><label>Число місяця</label><input type="number" id="ctl-dom" min="1" max="31" value="${dayOfMonth||1}"></div>`;
+  }
+  return `<div class="form-group"><label>Дата</label><input type="date" id="ctl-once-date" value="${onceDate||''}"></div>`;
+}
+function onControlPeriodTypeChange(){
+  const type=document.getElementById('ctl-period-type').value;
+  document.getElementById('ctl-period-fields').innerHTML=periodFieldsHtml(type);
+}
+function renderControlFilesEditor(){
+  const el=document.getElementById('ctl-files-list');
+  if(!el)return;
+  el.innerHTML=controlDraftFiles.map((f,i)=>`<div style="display:flex;align-items:center;gap:8px;padding:6px 8px;border:1px solid var(--border);border-radius:6px;margin-bottom:6px">
+    <span style="font-size:13px">${f.is_link?'🔗':'📎'}</span>
+    <a href="${f.file_url}" target="_blank" style="font-size:13px;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${f.file_name}</a>
+    <button class="btn btn-sm btn-danger" onclick="controlDraftFiles.splice(${i},1);renderControlFilesEditor()">✕</button>
+  </div>`).join('')||'<div style="font-size:12px;color:var(--muted)">Файлів або посилань ще немає</div>';
+}
+async function addControlFileUpload(input){
+  for(const file of input.files){
+    try{
+      const url=await uploadControlFile(file,'definition');
+      controlDraftFiles.push({file_name:file.name,file_url:url,is_link:false,_new:true});
+    }catch(e){alert('⚠️ '+e.message);}
+  }
+  input.value='';
+  renderControlFilesEditor();
+}
+function addControlFileLink(){
+  const url=prompt('Вставте посилання (URL):');
+  if(!url)return;
+  const name=prompt('Назва посилання:',url)||url;
+  controlDraftFiles.push({file_name:name,file_url:url,is_link:true,_new:true});
+  renderControlFilesEditor();
+}
+function openAddControl(){
+  editingControlId=null;
+  controlDraftFiles=[];
+  document.getElementById('ctl-modal-title').textContent='🎯 Новий контроль';
+  document.getElementById('ctl-title').value='';
+  document.getElementById('ctl-description').value='';
+  document.getElementById('ctl-period-type').value='once';
+  document.getElementById('ctl-period-fields').innerHTML=periodFieldsHtml('once');
+  document.getElementById('ctl-deadline-time').value='18:00';
+  document.getElementById('ctl-responsible').value='';
+  document.getElementById('ctl-reminder').value='60';
+  renderControlFilesEditor();
+  document.getElementById('modal-control').classList.add('open');
+}
+async function openEditControl(id){
+  await loadControlsData();
+  const c=DB.controls.find(x=>x.id===id);
+  if(!c)return;
+  editingControlId=id;
+  controlDraftFiles=DB.controlFiles.filter(f=>f.control_id===id).map(f=>({...f}));
+  document.getElementById('ctl-modal-title').textContent='🎯 Редагування контролю';
+  document.getElementById('ctl-title').value=c.title||'';
+  document.getElementById('ctl-description').value=c.description||'';
+  document.getElementById('ctl-period-type').value=c.period_type||'once';
+  document.getElementById('ctl-period-fields').innerHTML=periodFieldsHtml(c.period_type,c.weekday,c.day_of_month,c.once_date);
+  document.getElementById('ctl-deadline-time').value=fmtTime(c.deadline_time)||'18:00';
+  document.getElementById('ctl-responsible').value=c.responsible_login||c.responsible_text||'';
+  document.getElementById('ctl-reminder').value=c.reminder_minutes_before??60;
+  renderControlFilesEditor();
+  document.getElementById('modal-control').classList.add('open');
+}
+async function saveControl(){
+  const title=document.getElementById('ctl-title').value.trim();
+  if(!title)return alert('Введіть назву контролю');
+  const periodType=document.getElementById('ctl-period-type').value;
+  const respRaw=document.getElementById('ctl-responsible').value.trim();
+  const respUser=DB.users.find(u=>u.login===respRaw||u.initials===respRaw);
+
+  const data={
+    title,
+    description:document.getElementById('ctl-description').value.trim()||null,
+    period_type:periodType,
+    once_date:periodType==='once'?(document.getElementById('ctl-once-date')?.value||null):null,
+    weekday:periodType==='weekly'?+document.getElementById('ctl-weekday').value:null,
+    day_of_month:periodType==='monthly'?+document.getElementById('ctl-dom').value:null,
+    deadline_time:document.getElementById('ctl-deadline-time').value||'18:00',
+    responsible_login:respUser?respUser.login:null,
+    responsible_text:respUser?null:(respRaw||null),
+    reminder_minutes_before:+document.getElementById('ctl-reminder').value||60,
+    is_active:true,
+  };
+
+  let controlId=editingControlId;
+  if(controlId){
+    data.editor_login=session.login;data.edit_time=new Date().toISOString();
+    await patch('controls',controlId,data);
+  }else{
+    data.creator_login=session.login;
+    const res=await post('controls',data);
+    controlId=Array.isArray(res)?res[0]?.id:res?.id;
+    if(!controlId){alert('⚠️ Не вдалося створити контроль');return;}
+  }
+
+  await delWhere('control_files','control_id',controlId);
+  for(const f of controlDraftFiles){
+    await post('control_files',{control_id:controlId,file_name:f.file_name,file_url:f.file_url,is_link:!!f.is_link});
+  }
+
+  closeModal('control');
+  DB.controlsLoaded=false;
+  renderControls();
+}
+async function deleteControl(id){
+  if(!confirm('Видалити цей контроль разом з усією історією виконань?'))return;
+  await del('controls',id);
+  DB.controlsLoaded=false;
+  renderControls();
+}
+
+// ── Деталі контролю + позначення виконання ──
+let controlDetailId=null;
+let controlCompleteFiles=[];
+async function openControlDetail(id){
+  await loadControlsData();
+  const c=DB.controls.find(x=>x.id===id);
+  if(!c)return;
+  controlDetailId=id;
+  controlCompleteFiles=[];
+  const period=computeControlPeriod(c,new Date());
+  const done=period?isControlDone(c,period.periodLabel):false;
+  const history=DB.controlCompletions.filter(x=>x.control_id===id).sort((a,b)=>new Date(b.completed_at)-new Date(a.completed_at));
+
+  document.getElementById('ctld-title').textContent=c.title;
+  document.getElementById('ctld-body').innerHTML=`
+    ${c.description?`<div style="font-size:13px;color:var(--muted);margin-bottom:12px">${c.description}</div>`:''}
+    <div class="form-grid" style="margin-bottom:14px">
+      <div class="edbo-print-field"><div class="edbo-print-field-label">Періодичність</div><div class="edbo-print-field-value">${period?period.periodStartText:'—'}</div></div>
+      <div class="edbo-print-field"><div class="edbo-print-field-label">Час дедлайну</div><div class="edbo-print-field-value">${fmtTime(c.deadline_time)}</div></div>
+      <div class="edbo-print-field"><div class="edbo-print-field-label">Відповідальний</div><div class="edbo-print-field-value">${responsibleLabel(c)}</div></div>
+      <div class="edbo-print-field"><div class="edbo-print-field-label">Нагадувати за</div><div class="edbo-print-field-value">${c.reminder_minutes_before||60} хв до дедлайну</div></div>
+    </div>
+    ${DB.controlFiles.filter(f=>f.control_id===id).length?`<div style="margin-bottom:14px">
+      <div style="font-size:12px;font-weight:700;color:var(--muted);margin-bottom:6px">Файли/посилання контролю</div>
+      ${DB.controlFiles.filter(f=>f.control_id===id).map(f=>`<div style="font-size:13px;margin-bottom:4px">${f.is_link?'🔗':'📎'} <a href="${f.file_url}" target="_blank">${f.file_name}</a></div>`).join('')}
+    </div>`:''}
+    <div style="border-top:1px solid var(--border);padding-top:12px;margin-bottom:14px">
+      <div style="font-weight:700;font-size:13px;margin-bottom:8px">${done?'✅ Поточний період виконано':'Позначити поточний період виконаним'}</div>
+      ${done?'':`
+        <div class="form-group" style="margin-bottom:8px"><label>Примітка</label><textarea id="ctld-note" rows="2" placeholder="Необов'язково"></textarea></div>
+        <div class="form-group" style="margin-bottom:8px"><label>Файли виконання</label><input type="file" multiple onchange="addControlCompleteFile(this)"></div>
+        <div id="ctld-complete-files" style="margin-bottom:8px"></div>
+        <button class="btn btn-primary" onclick="markControlComplete()">✅ Позначити виконаним</button>
+      `}
+    </div>
+    <div>
+      <div style="font-weight:700;font-size:13px;margin-bottom:8px">Історія виконань (${history.length})</div>
+      ${history.length?history.map(h=>{
+        const hf=DB.controlCompletionFiles.filter(f=>f.completion_id===h.id);
+        return `<div style="border:1px solid var(--border);border-radius:8px;padding:10px;margin-bottom:8px">
+          <div style="font-size:13px;font-weight:600">${h.period_label} — ${new Date(h.completed_at).toLocaleString('uk-UA')}</div>
+          <div style="font-size:12px;color:var(--muted)">Виконав(ла): ${h.completed_by_login||'—'}</div>
+          ${h.note?`<div style="font-size:12px;margin-top:4px">${h.note}</div>`:''}
+          ${hf.length?hf.map(f=>`<div style="font-size:12px;margin-top:4px">${f.is_link?'🔗':'📎'} <a href="${f.file_url}" target="_blank">${f.file_name}</a></div>`).join(''):''}
+        </div>`;
+      }).join(''):'<div style="font-size:12px;color:var(--muted)">Ще не виконувався</div>'}
+    </div>`;
+  document.getElementById('modal-control-detail').classList.add('open');
+}
+function renderControlCompleteFiles(){
+  const el=document.getElementById('ctld-complete-files');
+  if(!el)return;
+  el.innerHTML=controlCompleteFiles.map((f,i)=>`<div style="display:flex;align-items:center;gap:8px;font-size:12px;margin-bottom:4px">
+    📎 ${f.file_name} <button class="btn btn-sm btn-danger" onclick="controlCompleteFiles.splice(${i},1);renderControlCompleteFiles()">✕</button>
+  </div>`).join('');
+}
+async function addControlCompleteFile(input){
+  for(const file of input.files){
+    try{
+      const url=await uploadControlFile(file,'completion');
+      controlCompleteFiles.push({file_name:file.name,file_url:url});
+    }catch(e){alert('⚠️ '+e.message);}
+  }
+  input.value='';
+  renderControlCompleteFiles();
+}
+async function markControlComplete(){
+  const c=DB.controls.find(x=>x.id===controlDetailId);
+  if(!c)return;
+  const period=computeControlPeriod(c,new Date());
+  if(!period)return alert('Період контролю не налаштовано');
+  const note=document.getElementById('ctld-note')?.value.trim()||null;
+  const res=await post('control_completions',{
+    control_id:c.id,period_label:period.periodLabel,completed_by_login:session.login,note
+  });
+  const completionId=Array.isArray(res)?res[0]?.id:res?.id;
+  if(completionId){
+    for(const f of controlCompleteFiles){
+      await post('control_completion_files',{completion_id:completionId,file_name:f.file_name,file_url:f.file_url,is_link:false});
+    }
+  }
+  DB.controlsLoaded=false;
+  closeModal('control-detail');
+  renderControls();
+}
+
 async function refreshAllData(){
   const btn=document.getElementById('btn-refresh-data');
   const original=btn.innerHTML;
@@ -2302,6 +2745,7 @@ async function refreshAllData(){
   btn.innerHTML='<span>🔄</span>Оновлення…';
   try{
     await loadAll();
+    DB.controlsLoaded=false;
     const activePage=document.querySelector('.page.active');
     const pageId=activePage?activePage.id.replace('p-',''):'dashboard';
     renderPage(pageId);
@@ -2326,6 +2770,7 @@ function renderPage(p){
   else if(p==='subjects')renderSubjects();
   else if(p==='teachers')renderTeachers();
   else if(p==='orders')renderOrders();
+  else if(p==='controls')renderControls();
   else if(p==='users'){loadUsers();}
   else if(p==='reports'){document.getElementById('report-output').innerHTML='';}
   else if(p==='permissions'){loadPermissions();}
