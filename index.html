@@ -2648,38 +2648,44 @@ async function openStatusBreakdownReport(){
     const gc=(ga?.group_number||'').localeCompare(gb?.group_number||'',undefined,{numeric:true});
     return gc||fullName(a).localeCompare(fullName(b),'uk');
   });
-  const rows=[
-    ...sortByGroupThenName(studying).map(s=>({s,statusKey:'studying'})),
-    ...sortByGroupThenName(edbo).map(s=>({s,statusKey:'edbo'})),
-    ...sortByGroupThenName(notEdbo).map(s=>({s,statusKey:'notEdbo'})),
+  const buckets=[
+    {key:'studying',persons:sortByGroupThenName(studying)},
+    {key:'edbo',persons:sortByGroupThenName(edbo)},
+    {key:'notEdbo',persons:sortByGroupThenName(notEdbo)},
   ];
 
-  let tbody='';
-  rows.forEach((row,idx)=>{
-    const s=row.s;
-    const meta=statusMeta[row.statusKey];
-    const group=DB.groups.find(g=>g.id===s.id_group_planning);
-    const profNames=[group?.id_profession_1,group?.id_profession_2,group?.id_profession_3]
-      .filter(Boolean).map(pid=>profCurrentById[pid]?.name).filter(Boolean);
-    const edu=docCell(bestDoc(s.id,'osvita'));
-    const idd=docCell(bestDoc(s.id,'identity'));
-    tbody+=`<tr style="background:${meta.bg}">
-      <td style="border:1px solid var(--border);padding:4px">${idx+1}</td>
-      <td style="border:1px solid var(--border);padding:4px;white-space:nowrap;color:${meta.color};font-weight:600">${meta.label}</td>
-      <td style="border:1px solid var(--border);padding:4px;white-space:nowrap" title="${profNames.join(', ')}">Гр. ${group?.group_number||s.id_group_planning}</td>
-      <td style="border:1px solid var(--border);padding:4px;white-space:nowrap">${fmtDate(s.date_birth)}</td>
-      <td style="border:1px solid var(--border);padding:4px">${fullName(s)}</td>
-      <td style="border:1px solid var(--border);padding:4px;white-space:nowrap">${s.rnokpp||''}</td>
-      <td style="border:1px solid var(--border);padding:4px">${edu.serial}</td>
-      <td style="border:1px solid var(--border);padding:4px;white-space:nowrap">${edu.date}</td>
-      <td style="border:1px solid var(--border);padding:4px">${edu.by}</td>
-      <td style="border:1px solid var(--border);padding:4px">${idd.type}</td>
-      <td style="border:1px solid var(--border);padding:4px">${idd.serial}</td>
-      <td style="border:1px solid var(--border);padding:4px;white-space:nowrap">${idd.date}</td>
-      <td style="border:1px solid var(--border);padding:4px;white-space:nowrap">${idd.end}</td>
-      <td style="border:1px solid var(--border);padding:4px">${idd.by}</td>
-      <td style="border:1px solid var(--border);padding:4px;white-space:nowrap">${s.unzr||''}</td>
-    </tr>`;
+  let tbody='',rowNum=0;
+  buckets.forEach(bucket=>{
+    const meta=statusMeta[bucket.key];
+    tbody+=`<tr><td colspan="14" style="border:1px solid var(--border);padding:6px 8px;background:${meta.bg};color:${meta.color};font-weight:700;font-size:12px">${meta.label} (${bucket.persons.length})</td></tr>`;
+    if(!bucket.persons.length){
+      tbody+=`<tr><td colspan="14" style="border:1px solid var(--border);padding:6px 8px;color:var(--muted);font-style:italic">Немає осіб у цій категорії</td></tr>`;
+      return;
+    }
+    bucket.persons.forEach(s=>{
+      rowNum++;
+      const group=DB.groups.find(g=>g.id===s.id_group_planning);
+      const profNames=[group?.id_profession_1,group?.id_profession_2,group?.id_profession_3]
+        .filter(Boolean).map(pid=>profCurrentById[pid]?.name).filter(Boolean);
+      const edu=docCell(bestDoc(s.id,'osvita'));
+      const idd=docCell(bestDoc(s.id,'identity'));
+      tbody+=`<tr>
+        <td style="border:1px solid var(--border);padding:4px">${rowNum}</td>
+        <td style="border:1px solid var(--border);padding:4px;white-space:nowrap" title="${profNames.join(', ')}">Гр. ${group?.group_number||s.id_group_planning}</td>
+        <td style="border:1px solid var(--border);padding:4px;white-space:nowrap">${fmtDate(s.date_birth)}</td>
+        <td style="border:1px solid var(--border);padding:4px">${fullName(s)}</td>
+        <td style="border:1px solid var(--border);padding:4px;white-space:nowrap">${s.rnokpp||''}</td>
+        <td style="border:1px solid var(--border);padding:4px">${edu.serial}</td>
+        <td style="border:1px solid var(--border);padding:4px;white-space:nowrap">${edu.date}</td>
+        <td style="border:1px solid var(--border);padding:4px">${edu.by}</td>
+        <td style="border:1px solid var(--border);padding:4px">${idd.type}</td>
+        <td style="border:1px solid var(--border);padding:4px">${idd.serial}</td>
+        <td style="border:1px solid var(--border);padding:4px;white-space:nowrap">${idd.date}</td>
+        <td style="border:1px solid var(--border);padding:4px;white-space:nowrap">${idd.end}</td>
+        <td style="border:1px solid var(--border);padding:4px">${idd.by}</td>
+        <td style="border:1px solid var(--border);padding:4px;white-space:nowrap">${s.unzr||''}</td>
+      </tr>`;
+    });
   });
 
   body.innerHTML=`<div class="print-report">
@@ -2696,7 +2702,6 @@ async function openStatusBreakdownReport(){
       <thead>
         <tr>
           <th rowspan="2" style="border:1px solid var(--border);padding:4px">№</th>
-          <th rowspan="2" style="border:1px solid var(--border);padding:4px">Статус</th>
           <th rowspan="2" style="border:1px solid var(--border);padding:4px">Група</th>
           <th rowspan="2" style="border:1px solid var(--border);padding:4px">Дата народж.</th>
           <th rowspan="2" style="border:1px solid var(--border);padding:4px">П. І. Б.</th>
@@ -2718,7 +2723,7 @@ async function openStatusBreakdownReport(){
       </thead>
       <tbody>${tbody}</tbody>
     </table>
-    <div style="text-align:right;font-size:13px;font-weight:700;border-top:2px solid var(--text);padding-top:8px;margin-top:8px">Разом: ${rows.length}</div>
+    <div style="text-align:right;font-size:13px;font-weight:700;border-top:2px solid var(--text);padding-top:8px;margin-top:8px">Разом: ${rowNum}</div>
   </div>`;
 }
 
