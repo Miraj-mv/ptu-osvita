@@ -2692,7 +2692,12 @@ async function openControlDetail(id){
       <div style="font-weight:700;font-size:13px;margin-bottom:8px">${done?'✅ Поточний період виконано':'Позначити поточний період виконаним'}</div>
       ${done?'':`
         <div class="form-group" style="margin-bottom:8px"><label>Примітка</label><textarea id="ctld-note" rows="2" placeholder="Необов'язково"></textarea></div>
-        <div class="form-group" style="margin-bottom:8px"><label>Файли виконання</label><input type="file" multiple onchange="addControlCompleteFile(this)"></div>
+        <div class="form-group" style="margin-bottom:8px"><label>Файли або посилання виконання</label>
+          <div style="display:flex;gap:8px">
+            <input type="file" multiple onchange="addControlCompleteFile(this)" style="flex:1">
+            <button class="btn btn-sm" onclick="addControlCompleteLink()">🔗 Додати посилання</button>
+          </div>
+        </div>
         <div id="ctld-complete-files" style="margin-bottom:8px"></div>
         <button class="btn btn-primary" onclick="markControlComplete()">✅ Позначити виконаним</button>
       `}
@@ -2715,17 +2720,24 @@ function renderControlCompleteFiles(){
   const el=document.getElementById('ctld-complete-files');
   if(!el)return;
   el.innerHTML=controlCompleteFiles.map((f,i)=>`<div style="display:flex;align-items:center;gap:8px;font-size:12px;margin-bottom:4px">
-    📎 ${f.file_name} <button class="btn btn-sm btn-danger" onclick="controlCompleteFiles.splice(${i},1);renderControlCompleteFiles()">✕</button>
+    ${f.is_link?'🔗':'📎'} <a href="${f.file_url}" target="_blank" style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${f.file_name}</a> <button class="btn btn-sm btn-danger" onclick="controlCompleteFiles.splice(${i},1);renderControlCompleteFiles()">✕</button>
   </div>`).join('');
 }
 async function addControlCompleteFile(input){
   for(const file of input.files){
     try{
       const url=await uploadControlFile(file,'completion');
-      controlCompleteFiles.push({file_name:file.name,file_url:url});
+      controlCompleteFiles.push({file_name:file.name,file_url:url,is_link:false});
     }catch(e){alert('⚠️ '+e.message);}
   }
   input.value='';
+  renderControlCompleteFiles();
+}
+function addControlCompleteLink(){
+  const url=prompt('Вставте посилання (наприклад, на файл у хмарному сховищі):');
+  if(!url)return;
+  const name=prompt('Назва посилання:',url)||url;
+  controlCompleteFiles.push({file_name:name,file_url:url,is_link:true});
   renderControlCompleteFiles();
 }
 async function markControlComplete(){
@@ -2740,7 +2752,7 @@ async function markControlComplete(){
   const completionId=Array.isArray(res)?res[0]?.id:res?.id;
   if(completionId){
     for(const f of controlCompleteFiles){
-      await post('control_completion_files',{completion_id:completionId,file_name:f.file_name,file_url:f.file_url,is_link:false});
+      await post('control_completion_files',{completion_id:completionId,file_name:f.file_name,file_url:f.file_url,is_link:!!f.is_link});
     }
   }
   DB.controlsLoaded=false;
