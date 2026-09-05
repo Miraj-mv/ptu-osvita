@@ -2121,6 +2121,7 @@ th.sortable:hover{background:var(--bg)}
   <div class="modal-body" style="display:flex;flex-direction:column;gap:12px">
     <div class="form-group"><label>ПІБ (ініціали) *</label><input type="text" id="u-initials" placeholder="Іваненко І. І."></div>
     <div class="form-group"><label>Логін *</label><input type="text" id="u-login" placeholder="ivan"></div>
+    <div class="form-group"><label>Email <span style="color:var(--muted);font-weight:400">(для сповіщень по контролям)</span></label><input type="email" id="u-email" placeholder="ivan@example.com"></div>
     <div class="form-group"><label>Пароль <span id="u-pass-hint" style="color:var(--muted);font-weight:400">(залиште порожнім щоб не змінювати)</span></label>
       <input type="password" id="u-password" placeholder="Мінімум 6 символів">
     </div>
@@ -2183,6 +2184,7 @@ th.sortable:hover{background:var(--bg)}
     <div class="form-group"><label>Дата нар.</label><input type="date" id="nt-birth"></div>
     <div class="form-group"><label>Логін</label><input type="text" id="nt-login"></div>
     <div class="form-group"><label>Пароль</label><input type="password" id="nt-pass"></div>
+    <div class="form-group" style="grid-column:1/-1"><label>Email <span style="color:var(--muted);font-weight:400">(для сповіщень по контролям)</span></label><input type="email" id="nt-email"></div>
   </div></div>
   <div class="modal-footer"><div></div><div style="display:flex;gap:8px"><button class="btn" onclick="closeModal('add-teacher')">Скасувати</button><button class="btn btn-primary" onclick="saveTeacher()">✓ Зберегти</button></div></div>
 </div></div>
@@ -4542,7 +4544,7 @@ function renderTeachers(){
 }
 async function saveGroup(){const num=document.getElementById('ng-num').value.trim();if(!num)return alert('Введіть номер');const res=await post('groups',{group_number:num,name:document.getElementById('ng-name').value.trim(),curriculum:parseInt(document.getElementById('ng-cur').value),id_groups_type:parseInt(document.getElementById('ng-type').value)});if(Array.isArray(res)&&res[0]){DB.groups.push(res[0]);closeModal('add-group');renderGroups();populateSelects();}else alert('Помилка');}
 async function saveSubject(){const t=document.getElementById('nsubj-title').value.trim();if(!t)return alert('Введіть назву');const res=await post('subjects',{subjects_title:t,type_of_subject:parseInt(document.getElementById('nsubj-type').value)||null});if(Array.isArray(res)&&res[0]){DB.subjects.push(res[0]);DB.subjects.sort((a,b)=>a.subjects_title.localeCompare(b.subjects_title));closeModal('add-subject');renderSubjects();populateSelects();}else alert('Помилка');}
-async function saveTeacher(){const sur=document.getElementById('nt-sur').value.trim();if(!sur)return alert('Введіть прізвище');const login=document.getElementById('nt-login').value.trim();const pass=document.getElementById('nt-pass').value;const d={surname:sur,name:document.getElementById('nt-name').value.trim(),middle_name:document.getElementById('nt-mid').value.trim(),date_birth:document.getElementById('nt-birth').value||null};if(login){if(!pass||pass.length<6)return alert('Пароль мінімум 6 символів');d.login=login;d.password_hash=await getBcrypt().hash(pass,10);}const res=await post('teachers',d);if(Array.isArray(res)&&res[0]){DB.teachers.push(res[0]);closeModal('add-teacher');renderTeachers();}else alert('Помилка');}
+async function saveTeacher(){const sur=document.getElementById('nt-sur').value.trim();if(!sur)return alert('Введіть прізвище');const login=document.getElementById('nt-login').value.trim();const pass=document.getElementById('nt-pass').value;const d={surname:sur,name:document.getElementById('nt-name').value.trim(),middle_name:document.getElementById('nt-mid').value.trim(),date_birth:document.getElementById('nt-birth').value||null,email:document.getElementById('nt-email').value.trim()||null};if(login){if(!pass||pass.length<6)return alert('Пароль мінімум 6 символів');d.login=login;d.password_hash=await getBcrypt().hash(pass,10);}const res=await post('teachers',d);if(Array.isArray(res)&&res[0]){DB.teachers.push(res[0]);closeModal('add-teacher');renderTeachers();}else alert('Помилка');}
 async function deleteItem(table,id,key){if(!confirm('Видалити?'))return;await del(table,id);DB[key]=DB[key].filter(x=>x.id!==id);renderPage(key==='groups'?'groups':key==='subjects'?'subjects':'teachers');populateSelects();}
 
 // ── ЖУРНАЛ ──
@@ -4998,8 +5000,8 @@ let editingUserType = null; // 'admin' або 'teacher'
 
 async function loadUsers(){
   const [users, teachers, roles] = await Promise.all([
-    api('dic_users', '?select=login,initials,role_id&order=login'),
-    api('teachers', '?select=id,surname,name,middle_name,login&order=surname'),
+    api('dic_users', '?select=login,initials,role_id,email&order=login'),
+    api('teachers', '?select=id,surname,name,middle_name,login,email&order=surname'),
     api('roles', ''),
   ]);
   usersData = Array.isArray(users) ? users : [];
@@ -5025,6 +5027,7 @@ function renderUsers(){
     <thead><tr>
       <th>ПІБ / Ім'я</th>
       <th>Логін</th>
+      <th>Email</th>
       <th>Роль</th>
       <th>Тип</th>
       <th></th>
@@ -5036,6 +5039,7 @@ function renderUsers(){
     html += `<tr>
       <td style="font-weight:500">${u.initials||'—'}</td>
       <td><code style="background:#F5F5F5;padding:2px 7px;border-radius:5px;font-size:12px">${u.login}</code></td>
+      <td style="font-size:12px;color:var(--muted)">${u.email||'—'}</td>
       <td>${getRoleBadge(u.role_id)}</td>
       <td><span class="badge b-blue" style="font-size:10px">Системний</span></td>
       <td>
@@ -5053,6 +5057,7 @@ function renderUsers(){
     html += `<tr>
       <td style="font-weight:500">${name}</td>
       <td><code style="background:#F5F5F5;padding:2px 7px;border-radius:5px;font-size:12px">${t.login}</code></td>
+      <td style="font-size:12px;color:var(--muted)">${t.email||'—'}</td>
       <td>${getRoleBadge(2)}</td>
       <td><span class="badge b-teal" style="font-size:10px">Викладач</span></td>
       <td>
@@ -5075,6 +5080,7 @@ function openAddUser(){
   document.getElementById('user-modal-title').textContent = '➕ Новий користувач';
   document.getElementById('u-initials').value = '';
   document.getElementById('u-login').value = '';
+  document.getElementById('u-email').value = '';
   document.getElementById('u-password').value = '';
   document.getElementById('u-role').value = '3';
   document.getElementById('u-pass-hint').style.display = 'none';
@@ -5101,6 +5107,7 @@ function openEditUser(type, id){
     const u = usersData.find(x => x.login === id);
     document.getElementById('u-initials').value = u?.initials || '';
     document.getElementById('u-login').value = u?.login || '';
+    document.getElementById('u-email').value = u?.email || '';
     document.getElementById('u-password').value = '';
     document.getElementById('u-role').innerHTML = `
       <option value="1" ${u?.role_id==1?'selected':''}>Адміністратор</option>
@@ -5115,6 +5122,7 @@ function openEditUser(type, id){
     const name = `${t?.surname||''} ${t?.name||''} ${t?.middle_name||''}`.trim();
     document.getElementById('u-initials').value = name;
     document.getElementById('u-login').value = t?.login || '';
+    document.getElementById('u-email').value = t?.email || '';
     document.getElementById('u-password').value = '';
     document.getElementById('u-role').innerHTML = `<option value="2" selected>Викладач</option>`;
   }
@@ -5124,6 +5132,7 @@ function openEditUser(type, id){
 async function saveUser(){
   const initials = document.getElementById('u-initials').value.trim();
   const login = document.getElementById('u-login').value.trim();
+  const email = document.getElementById('u-email').value.trim();
   const password = document.getElementById('u-password').value;
   const roleId = parseInt(document.getElementById('u-role').value);
   const errEl = document.getElementById('u-error');
@@ -5151,7 +5160,7 @@ async function saveUser(){
 
     if(editingUserType === 'teacher' && editingTeacherId){
       // Оновлюємо викладача
-      const upd = { login };
+      const upd = { login, email: email||null };
       if(hashVal) upd.password_hash = hashVal;
       await patch('teachers', editingTeacherId, upd);
       const t = teachersWithLogin.find(x => x.id === editingTeacherId);
@@ -5161,23 +5170,23 @@ async function saveUser(){
       if(dt) dt.login = login;
     } else if(editingUserLogin){
       // Оновлюємо dic_users — PATCH по login
-      const upd = { initials, role_id: roleId };
+      const upd = { initials, role_id: roleId, email: email||null };
       if(hashVal) upd.password_hash = hashVal;
       await fetch(`${SB}/rest/v1/dic_users?login=eq.${encodeURIComponent(editingUserLogin)}`, {
         method: 'PATCH', headers: H, body: JSON.stringify(upd)
       });
       const u = usersData.find(x => x.login === editingUserLogin);
-      if(u){ u.initials = initials; u.role_id = roleId; }
+      if(u){ u.initials = initials; u.role_id = roleId; u.email = email||null; }
     } else {
       // Новий користувач — dic_users не має serial id тому перевіряємо по HTTP статусу
-      const newUser = { login, initials, role_id: roleId, password_hash: hashVal, create_time: new Date().toISOString(), edit_time: new Date().toISOString() };
+      const newUser = { login, initials, role_id: roleId, email: email||null, password_hash: hashVal, create_time: new Date().toISOString(), edit_time: new Date().toISOString() };
       const resp = await fetch(`${SB}/rest/v1/dic_users`, {
         method: 'POST',
         headers: {...H, Prefer: 'return=representation'},
         body: JSON.stringify(newUser)
       });
       if(resp.ok){
-        usersData.push({login, initials, role_id: roleId});
+        usersData.push({login, initials, role_id: roleId, email: email||null});
       } else {
         let err = {};
         try{ err = await resp.json(); }catch(e){}
