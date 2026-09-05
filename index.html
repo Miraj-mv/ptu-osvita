@@ -2057,6 +2057,11 @@ th.sortable:hover{background:var(--bg)}
       <input type="text" id="ctl-responsible" list="control-users-datalist" placeholder="Оберіть користувача або впишіть ПІБ">
       <datalist id="control-users-datalist"></datalist>
     </div>
+    <div class="form-group" style="margin-bottom:12px">
+      <label>Від кого контроль</label>
+      <input type="text" id="ctl-source" list="control-source-datalist" placeholder="Необов'язково — напр. Департамент освіти">
+      <datalist id="control-source-datalist"></datalist>
+    </div>
     <div class="form-group">
       <label>Файли / посилання контролю</label>
       <div id="ctl-files-list" style="margin-bottom:8px"></div>
@@ -2206,7 +2211,7 @@ const ORDER_TYPES={1:'📥 Зарахування',2:'📤 Відрахуван�
 const ORDER_STATES={1:{lbl:'Чорновик',cls:'b-gray'},2:{lbl:'Активний',cls:'b-green'},3:{lbl:'Відмінений',cls:'b-red'}};
 
 let session=null;
-let DB={individuals:[],groups:[],subjects:[],teachers:[],years:[],subjectTypes:[],pupils:[],orders:[],orderIndividuals:[],nationalities:[],cities:[],docTypes:[],relTypes:[],groupTypes:[],issuedBy:[],sexes:[],indDocFlags:{},controls:[],controlFiles:[],controlCompletions:[],controlCompletionFiles:[],users:[],controlsLoaded:false};
+let DB={individuals:[],groups:[],subjects:[],teachers:[],years:[],subjectTypes:[],pupils:[],orders:[],orderIndividuals:[],nationalities:[],cities:[],docTypes:[],relTypes:[],groupTypes:[],issuedBy:[],sexes:[],indDocFlags:{},controls:[],controlFiles:[],controlCompletions:[],controlCompletionFiles:[],users:[],controlSources:[],controlsLoaded:false};
 let grades={};
 let gradeTarget=null;
 let currentIndId=null;
@@ -2382,21 +2387,43 @@ async function uploadControlFile(file,subfolder){
 
 async function loadControlsData(){
   if(DB.controlsLoaded)return;
-  const [controls,files,completions,compFiles,users]=await Promise.all([
+  const [controls,files,completions,compFiles,users,sources]=await Promise.all([
     api('controls','?order=id'),
     api('control_files','?order=id'),
     api('control_completions','?order=id'),
     api('control_completion_files','?order=id'),
     DB.users.length?Promise.resolve(DB.users):api('dic_users','?select=login,initials'),
+    api('dic_control_source','?order=name'),
   ]);
   DB.controls=Array.isArray(controls)?controls:[];
   DB.controlFiles=Array.isArray(files)?files:[];
   DB.controlCompletions=Array.isArray(completions)?completions:[];
   DB.controlCompletionFiles=Array.isArray(compFiles)?compFiles:[];
   DB.users=Array.isArray(users)?users:[];
+  DB.controlSources=Array.isArray(sources)?sources:[];
   DB.controlsLoaded=true;
   const dl=document.getElementById('control-users-datalist');
   if(dl)dl.innerHTML=DB.users.map(u=>`<option value="${u.login}">${(u.initials||u.login).replace(/"/g,'&quot;')}</option>`).join('');
+  renderControlSourcesDatalist();
+}
+function renderControlSourcesDatalist(){
+  const dl=document.getElementById('control-source-datalist');
+  if(dl)dl.innerHTML=(DB.controlSources||[]).map(s=>`<option value="${(s.name||'').replace(/"/g,'&quot;')}">`).join('');
+}
+async function resolveControlSourceId(name){
+  if(!name||!name.trim())return null;
+  const trimmed=name.trim();
+  let rec=(DB.controlSources||[]).find(x=>(x.name||'').trim().toLowerCase()===trimmed.toLowerCase());
+  if(rec)return rec.id;
+  const created=await post('dic_control_source',{name:trimmed});
+  const rec2=Array.isArray(created)?created[0]:created;
+  if(rec2&&rec2.id){DB.controlSources.push(rec2);renderControlSourcesDatalist();return rec2.id;}
+  return null;
+}
+function controlSourceLabel(control){
+  if(!control.source_id)return '';
+  const s=(DB.controlSources||[]).find(x=>x.id===control.source_id);
+  return s?s.name:'';
 }
 
 // Визначає поточний період контролю відносно refDate: {periodLabel, deadline}
@@ -2496,6 +2523,7 @@ function renderControls(){
           <div style="font-size:12px;color:var(--muted);margin-top:6px">${periodTxt}</div>
           ${period?`<div style="font-size:12px;color:${style.txt};font-weight:600;margin-top:2px">До: ${deadlineTxt}</div>`:''}
           <div style="font-size:12px;color:var(--muted);margin-top:6px">👤 ${responsibleLabel(c)}</div>
+          ${controlSourceLabel(c)?`<div style="font-size:12px;color:var(--muted);margin-top:2px">📋 Від: ${controlSourceLabel(c)}</div>`:''}
           <div style="margin-top:10px;font-size:12px;font-weight:700;color:${style.txt}">${statusTxt}</div>
         </div>`;
       }).join('')}
@@ -2593,6 +2621,7 @@ function openAddControl(){
   document.getElementById('ctl-period-fields').innerHTML=periodFieldsHtml('once');
   document.getElementById('ctl-deadline-time').value='18:00';
   document.getElementById('ctl-responsible').value='';
+  document.getElementById('ctl-source').value='';
   document.getElementById('ctl-reminder').value='60';
   renderControlFilesEditor();
   document.getElementById('modal-control').classList.add('open');
@@ -2610,6 +2639,7 @@ async function openEditControl(id){
   document.getElementById('ctl-period-fields').innerHTML=periodFieldsHtml(c.period_type,c.weekday,c.day_of_month,c.once_date);
   document.getElementById('ctl-deadline-time').value=fmtTime(c.deadline_time)||'18:00';
   document.getElementById('ctl-responsible').value=c.responsible_login||c.responsible_text||'';
+  document.getElementById('ctl-source').value=controlSourceLabel(c);
   document.getElementById('ctl-reminder').value=c.reminder_minutes_before??60;
   renderControlFilesEditor();
   document.getElementById('modal-control').classList.add('open');
@@ -2620,6 +2650,8 @@ async function saveControl(){
   const periodType=document.getElementById('ctl-period-type').value;
   const respRaw=document.getElementById('ctl-responsible').value.trim();
   const respUser=DB.users.find(u=>u.login===respRaw||u.initials===respRaw);
+  const sourceRaw=document.getElementById('ctl-source').value.trim();
+  const sourceId=await resolveControlSourceId(sourceRaw);
 
   const data={
     title,
@@ -2631,6 +2663,7 @@ async function saveControl(){
     deadline_time:document.getElementById('ctl-deadline-time').value||'18:00',
     responsible_login:respUser?respUser.login:null,
     responsible_text:respUser?null:(respRaw||null),
+    source_id:sourceId,
     reminder_minutes_before:+document.getElementById('ctl-reminder').value||60,
     is_active:true,
   };
@@ -2682,6 +2715,7 @@ async function openControlDetail(id){
       <div class="edbo-print-field"><div class="edbo-print-field-label">Періодичність</div><div class="edbo-print-field-value">${period?period.periodStartText:'—'}</div></div>
       <div class="edbo-print-field"><div class="edbo-print-field-label">Час дедлайну</div><div class="edbo-print-field-value">${fmtTime(c.deadline_time)}</div></div>
       <div class="edbo-print-field"><div class="edbo-print-field-label">Відповідальний</div><div class="edbo-print-field-value">${responsibleLabel(c)}</div></div>
+      <div class="edbo-print-field"><div class="edbo-print-field-label">Від кого контроль</div><div class="edbo-print-field-value">${controlSourceLabel(c)||'—'}</div></div>
       <div class="edbo-print-field"><div class="edbo-print-field-label">Нагадувати за</div><div class="edbo-print-field-value">${c.reminder_minutes_before||60} хв до дедлайну</div></div>
     </div>
     ${DB.controlFiles.filter(f=>f.control_id===id).length?`<div style="margin-bottom:14px">
