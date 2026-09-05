@@ -2205,8 +2205,8 @@ th.sortable:hover{background:var(--bg)}
 const SB='https://apwpwqftxecvwjqvtsew.supabase.co';
 const KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFwd3B3cWZ0eGVjdndqcXZ0c2V3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkxNzY4NzQsImV4cCI6MjA5NDc1Mjg3NH0.AbWaIZA0mjrUScT-6raw-llpiZr-V1L1wCfUCMNCDCc';
 const H={'apikey':KEY,'Authorization':'Bearer '+KEY,'Content-Type':'application/json'};
-const ROLES={admin:'Адміністратор',teacher:'Викладач',secretary:'Секретар'};
-const RBADGE={admin:'b-purple',teacher:'b-green',secretary:'b-amber'};
+const ROLES={admin:'Адміністратор',teacher:'Викладач',secretary:'Секретар',user:'Користувач'};
+const RBADGE={admin:'b-purple',teacher:'b-green',secretary:'b-amber',user:'b-gray'};
 const ORDER_TYPES={1:'📥 Зарахування',2:'📤 Відрахування',3:'🏆 Випуск',4:'🔄 Переведення'};
 const ORDER_STATES={1:{lbl:'Чорновик',cls:'b-gray'},2:{lbl:'Активний',cls:'b-green'},3:{lbl:'Відмінений',cls:'b-red'}};
 
@@ -5009,11 +5009,11 @@ async function loadUsers(){
 }
 
 function getRoleName(roleId){
-  const roleMap = {1:'Адміністратор', 2:'Викладач', 3:'Секретар'};
+  const roleMap = {1:'Адміністратор', 2:'Викладач', 3:'Секретар', 4:'Користувач'};
   return roleMap[roleId] || '—';
 }
 function getRoleBadge(roleId){
-  const cls = {1:'b-purple', 2:'b-green', 3:'b-amber'};
+  const cls = {1:'b-purple', 2:'b-green', 3:'b-amber', 4:'b-gray'};
   return `<span class="badge ${cls[roleId]||'b-gray'}">${getRoleName(roleId)}</span>`;
 }
 
@@ -5083,6 +5083,8 @@ function openAddUser(){
   document.getElementById('u-role').innerHTML = `
     <option value="1">Адміністратор</option>
     <option value="3">Секретар</option>
+    <option value="2">Викладач</option>
+    <option value="4">Користувач</option>
   `;
   openModal('user');
 }
@@ -5103,6 +5105,8 @@ function openEditUser(type, id){
     document.getElementById('u-role').innerHTML = `
       <option value="1" ${u?.role_id==1?'selected':''}>Адміністратор</option>
       <option value="3" ${u?.role_id==3?'selected':''}>Секретар</option>
+      <option value="2" ${u?.role_id==2?'selected':''}>Викладач</option>
+      <option value="4" ${u?.role_id==4?'selected':''}>Користувач</option>
     `;
   } else {
     editingTeacherId = id;
@@ -5502,6 +5506,7 @@ const PERM_ROLES = [
   {id:1, label:'Адміністратор', color:'#534AB7'},
   {id:3, label:'Секретар',      color:'#854F0B'},
   {id:2, label:'Викладач',      color:'#0F6E56'},
+  {id:4, label:'Користувач',    color:'#6B7280'},
 ];
 const ACCESS_LEVELS = [
   {val:0, label:'❌ Немає',    cls:'b-gray'},
