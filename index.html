@@ -2415,16 +2415,26 @@ function computeControlPeriod(control,refDate){
     const diff=(d.getDay()-wd+7)%7;
     d.setDate(d.getDate()-diff);
     d.setHours(0,0,0,0);
+    let deadline=new Date(d);deadline.setHours(hh,mm||0,0,0);
+    if(control.create_time&&deadline<new Date(control.create_time)){
+      d.setDate(d.getDate()+7);
+      deadline=new Date(d);deadline.setHours(hh,mm||0,0,0);
+    }
     const periodLabel=d.toISOString().slice(0,10);
-    const deadline=new Date(d);deadline.setHours(hh,mm||0,0,0);
     return{periodLabel,deadline,periodStartText:'Щотижня, до '+WEEKDAY_NAMES_GEN[wd]};
   }
   if(control.period_type==='monthly'){
     const dom=control.day_of_month||1;
-    const y=refDate.getFullYear(),m=refDate.getMonth();
-    const lastDay=new Date(y,m+1,0).getDate();
-    const day=Math.min(dom,lastDay);
-    const deadline=new Date(y,m,day,hh,mm||0,0,0);
+    let y=refDate.getFullYear(),m=refDate.getMonth();
+    let lastDay=new Date(y,m+1,0).getDate();
+    let day=Math.min(dom,lastDay);
+    let deadline=new Date(y,m,day,hh,mm||0,0,0);
+    if(control.create_time&&deadline<new Date(control.create_time)){
+      m+=1;if(m>11){m=0;y+=1;}
+      lastDay=new Date(y,m+1,0).getDate();
+      day=Math.min(dom,lastDay);
+      deadline=new Date(y,m,day,hh,mm||0,0,0);
+    }
     const periodLabel=`${y}-${String(m+1).padStart(2,'0')}`;
     return{periodLabel,deadline,periodStartText:'Щомісяця, до '+dom+' числа'};
   }
