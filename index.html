@@ -2037,6 +2037,11 @@ th.sortable:hover{background:var(--bg)}
   </div>
   <div class="modal-body">
     <div class="form-group" style="margin-bottom:12px"><label>Назва *</label><input type="text" id="ctl-title" placeholder="Напр. Здача звіту по відвідуваності"></div>
+    <div class="form-group" style="margin-bottom:12px">
+      <label>Від кого контроль</label>
+      <input type="text" id="ctl-source" list="control-source-datalist" placeholder="Необов'язково — напр. Департамент освіти">
+      <datalist id="control-source-datalist"></datalist>
+    </div>
     <div class="form-group" style="margin-bottom:12px"><label>Опис</label><textarea id="ctl-description" rows="2" placeholder="Необов'язково"></textarea></div>
     <div class="form-grid" style="margin-bottom:12px">
       <div class="form-group"><label>Періодичність</label>
@@ -2056,11 +2061,6 @@ th.sortable:hover{background:var(--bg)}
       <label>Відповідальний</label>
       <input type="text" id="ctl-responsible" list="control-users-datalist" placeholder="Оберіть користувача або впишіть ПІБ">
       <datalist id="control-users-datalist"></datalist>
-    </div>
-    <div class="form-group" style="margin-bottom:12px">
-      <label>Від кого контроль</label>
-      <input type="text" id="ctl-source" list="control-source-datalist" placeholder="Необов'язково — напр. Департамент освіти">
-      <datalist id="control-source-datalist"></datalist>
     </div>
     <div class="form-group">
       <label>Файли / посилання контролю</label>
