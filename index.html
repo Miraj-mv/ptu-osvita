@@ -1638,7 +1638,7 @@ th.sortable:hover{background:var(--bg)}
         <div style="display:flex;gap:8px;align-items:center">
           <span id="controls-attention-badge" style="display:none;font-size:12px;font-weight:600;color:#DC2626;background:#FEE2E2;padding:5px 10px;border-radius:8px">⚠ 0 потребують уваги</span>
           <button class="btn" onclick="requestControlNotifications()">🔔 Увімкнути сповіщення</button>
-          <button class="btn btn-primary" onclick="openAddControl()">+ Додати контроль</button>
+          <button class="btn btn-primary" id="btn-add-control" onclick="openAddControl()">+ Додати контроль</button>
         </div>
       </div>
       <div id="controls-list"></div>
@@ -2479,12 +2479,19 @@ function responsibleLabel(control){
 }
 function fmtTime(t){return t?t.slice(0,5):'';}
 
+function isControlManager(){
+  return session&&(session.role==='admin'||session.role==='secretary');
+}
 function renderControls(){
   const listEl=document.getElementById('controls-list');
   listEl.innerHTML='<div class="empty-state">Завантаження…</div>';
+  const addBtn=document.getElementById('btn-add-control');
+  if(addBtn)addBtn.style.display=isControlManager()?'':'none';
   loadControlsData().then(()=>{
     const now=new Date();
-    const rows=DB.controls.filter(c=>c.is_active!==false).map(c=>{
+    const manager=isControlManager();
+    const visibleControls=DB.controls.filter(c=>c.is_active!==false&&(manager||c.responsible_login===session.login));
+    const rows=visibleControls.map(c=>{
       const period=computeControlPeriod(c,now);
       const done=period?isControlDone(c,period.periodLabel):false;
       const overdue=period&&!done&&now>period.deadline;
@@ -2502,7 +2509,7 @@ function renderControls(){
     else badge.style.display='none';
 
     if(!rows.length){
-      listEl.innerHTML='<div class="empty-state">Контролів ще немає. Натисніть "+ Додати контроль", щоб створити перший.</div>';
+      listEl.innerHTML=`<div class="empty-state">${manager?'Контролів ще немає. Натисніть "+ Додати контроль", щоб створити перший.':'Наразі на вас не розписано жодного контролю.'}</div>`;
       return;
     }
 
@@ -2515,10 +2522,10 @@ function renderControls(){
         return `<div class="card" style="padding:14px;border:1.5px solid ${style.border};background:${style.bg};cursor:pointer" onclick="openControlDetail(${c.id})">
           <div style="display:flex;justify-content:space-between;align-items:start;gap:8px">
             <div style="font-weight:700;font-size:14px;color:${style.txt}">${c.title}</div>
-            <div style="display:flex;gap:4px" onclick="event.stopPropagation()">
+            ${manager?`<div style="display:flex;gap:4px" onclick="event.stopPropagation()">
               <button class="btn btn-sm" onclick="openEditControl(${c.id})" title="Редагувати">✏️</button>
               <button class="btn btn-sm btn-danger" onclick="deleteControl(${c.id})" title="Видалити">🗑</button>
-            </div>
+            </div>`:''}
           </div>
           <div style="font-size:12px;color:var(--muted);margin-top:6px">${periodTxt}</div>
           ${period?`<div style="font-size:12px;color:${style.txt};font-weight:600;margin-top:2px">До: ${deadlineTxt}</div>`:''}
@@ -2612,6 +2619,7 @@ function addControlFileLink(){
   renderControlFilesEditor();
 }
 function openAddControl(){
+  if(!isControlManager()){alert('Тільки адміністратор або секретар можуть додавати контролі');return;}
   editingControlId=null;
   controlDraftFiles=[];
   document.getElementById('ctl-modal-title').textContent='🎯 Новий контроль';
@@ -2627,6 +2635,7 @@ function openAddControl(){
   document.getElementById('modal-control').classList.add('open');
 }
 async function openEditControl(id){
+  if(!isControlManager()){alert('Тільки адміністратор або секретар можуть редагувати контролі');return;}
   await loadControlsData();
   const c=DB.controls.find(x=>x.id===id);
   if(!c)return;
@@ -2646,6 +2655,7 @@ async function openEditControl(id){
 }
 async function saveControl(){
   const title=document.getElementById('ctl-title').value.trim();
+  if(!isControlManager())return alert('Тільки адміністратор або секретар можуть зберігати контролі');
   if(!title)return alert('Введіть назву контролю');
   const periodType=document.getElementById('ctl-period-type').value;
   const respRaw=document.getElementById('ctl-responsible').value.trim();
@@ -2689,6 +2699,7 @@ async function saveControl(){
   renderControls();
 }
 async function deleteControl(id){
+  if(!isControlManager()){alert('Тільки адміністратор або секретар можуть видаляти контролі');return;}
   if(!confirm('Видалити цей контроль разом з усією історією виконань?'))return;
   await del('controls',id);
   DB.controlsLoaded=false;
@@ -2702,6 +2713,7 @@ async function openControlDetail(id){
   await loadControlsData();
   const c=DB.controls.find(x=>x.id===id);
   if(!c)return;
+  if(!isControlManager()&&c.responsible_login!==session.login){alert('Цей контроль вам недоступний');return;}
   controlDetailId=id;
   controlCompleteFiles=[];
   const period=computeControlPeriod(c,new Date());
