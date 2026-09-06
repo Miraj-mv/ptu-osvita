@@ -1415,6 +1415,11 @@ th.sortable:hover{background:var(--bg)}
 .order-tree-person:hover{background:#F5F5F2}
 .order-tree-person-info{display:flex;align-items:center;gap:8px}
 </style>
+<link href="https://cdnjs.cloudflare.com/ajax/libs/quill/1.3.7/quill.snow.min.css" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/quill/1.3.7/quill.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdfmake/0.2.12/pdfmake.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdfmake/0.2.12/vfs_fonts.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/html-to-pdfmake@2.5.33/browser.js"></script>
 </head>
 <body>
 <datalist id="issued-by-education"></datalist>
@@ -1976,6 +1981,7 @@ th.sortable:hover{background:var(--bg)}
     <div id="ord-activation-info" style="font-size:12px;color:var(--muted)"></div>
     <div style="display:flex;gap:8px">
       <button class="btn" onclick="closeModal('order')">Закрити</button>
+      <button class="btn" id="ord-print-btn" style="display:none" onclick="printOrderAsPdf(currentOrderId)">🖨 Друк PDF</button>
       <button class="btn btn-primary" id="ord-save-btn" onclick="saveOrder()">💾 Зберегти</button>
     </div>
   </div>
@@ -2087,6 +2093,39 @@ th.sortable:hover{background:var(--bg)}
     <button class="modal-close" onclick="closeModal('control-detail')">✕</button>
   </div>
   <div class="modal-body" id="ctld-body" style="max-height:75vh;overflow:auto"></div>
+</div></div>
+
+<!-- РЕДАКТОР ШАБЛОНУ НАКАЗУ -->
+<div class="modal-overlay" id="modal-order-template"><div class="modal" style="width:min(900px,96vw)">
+  <div class="modal-header">
+    <div class="modal-title" id="tmpl-modal-title">🖨 Шаблон наказу</div>
+    <button class="modal-close" onclick="closeModal('order-template')">✕</button>
+  </div>
+  <div class="modal-body" style="max-height:78vh;overflow:auto">
+    <div class="form-grid" style="margin-bottom:12px">
+      <div class="form-group"><label>Назва шаблону</label><input type="text" id="tmpl-name" placeholder="Напр. Зарахування — стандартний"></div>
+      <div class="form-group"><label>Тип наказу</label>
+        <select id="tmpl-order-type">
+          <option value="1">📥 Зарахування</option>
+          <option value="2">📤 Відрахування</option>
+          <option value="3">🏆 Випуск</option>
+          <option value="4">🔄 Переведення</option>
+        </select>
+      </div>
+    </div>
+    <div style="margin-bottom:8px">
+      <div style="font-size:12px;font-weight:700;color:var(--muted);margin-bottom:6px">Вставити поле в місце курсора:</div>
+      <div id="tmpl-placeholders" style="display:flex;flex-wrap:wrap;gap:6px"></div>
+    </div>
+    <div id="quill-editor-container" style="height:340px;background:#fff"></div>
+  </div>
+  <div class="modal-footer">
+    <div></div>
+    <div style="display:flex;gap:8px">
+      <button class="btn" onclick="closeModal('order-template')">Скасувати</button>
+      <button class="btn btn-primary" onclick="saveTemplate()">💾 Зберегти шаблон</button>
+    </div>
+  </div>
 </div></div>
 
 <!-- ВИБІР ОСОБИ ДЛЯ НАКАЗУ -->
@@ -4096,6 +4135,9 @@ function renderOrders(){
           ${g?`<span>🏫 Гр. ${g.group_number}</span>`:''}
         </div>
         <div class="order-card-persons">👤 Осіб у наказі: <strong>${persons.length}</strong></div>
+        <div style="margin-top:8px" onclick="event.stopPropagation()">
+          <button class="btn btn-sm" onclick="printOrderAsPdf(${o.id})">🖨 Друк PDF</button>
+        </div>
       </div>`;
     }).join('');
   };
@@ -4107,6 +4149,7 @@ function renderOrders(){
 
 function openAddOrder(){
   currentOrderId=null;orderPersons=[];
+  document.getElementById('ord-print-btn').style.display='none';
   document.getElementById('ord-number').value='';
   document.getElementById('ord-date').value=new Date().toISOString().split('T')[0];
   document.getElementById('ord-type').value='1';
@@ -4122,6 +4165,7 @@ function openAddOrder(){
 async function openOrderModal(id){
   currentOrderId=id;
   const o=DB.orders.find(x=>x.id==id);if(!o)return;
+  document.getElementById('ord-print-btn').style.display='inline-flex';
   const persons=DB.orderIndividuals.filter(oi=>oi.order_id==id);
   orderPersons=persons.map(oi=>({individual_id:oi.individual_id,id_groups:oi.id_groups||null,id_groups_new:oi.id_groups_new||null,id:oi.id}));
   document.getElementById('ord-number').value=o.number||'';
@@ -4797,6 +4841,20 @@ function renderDictMenu() {
     groups[d.group].push(d);
   });
   let html = '';
+  {
+    const active = currentDict === 'order-templates';
+    html += `<div style="padding:8px 14px 4px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--muted)">Накази</div>`;
+    html += `<div onclick="selectOrderTemplates()"
+      style="padding:9px 16px;font-size:13px;cursor:pointer;transition:all .15s;
+      background:${active ? '#EEF2FF' : 'transparent'};
+      color:${active ? 'var(--accent)' : 'var(--text)'};
+      font-weight:${active ? '600' : '400'};
+      border-left:3px solid ${active ? 'var(--accent)' : 'transparent'}"
+      onmouseover="if(!${active})this.style.background='#FAFAF8'"
+      onmouseout="if(!${active})this.style.background='transparent'">
+      🖨 Шаблони наказів
+    </div>`;
+  }
   Object.keys(groups).forEach(g => {
     html += `<div style="padding:8px 14px 4px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--muted)">${g}</div>`;
     groups[g].forEach(d => {
@@ -4814,6 +4872,233 @@ function renderDictMenu() {
     });
   });
   document.getElementById('dict-menu').innerHTML = html;
+}
+
+// ══════════════════ ШАБЛОНИ НАКАЗІВ (довідник + PDF) ══════════════════
+let orderTemplates = [];
+let orgSettings = {};
+let quillEditor = null;
+let editingTemplateId = null;
+let templateTab = 1; // поточний обраний тип наказу у списку шаблонів
+
+async function loadOrderTemplatesData(){
+  const [tmpl, settings] = await Promise.all([
+    api('order_templates','?order=id'),
+    api('org_settings',''),
+  ]);
+  orderTemplates = Array.isArray(tmpl)?tmpl:[];
+  orgSettings = {};
+  (Array.isArray(settings)?settings:[]).forEach(s=>{orgSettings[s.key]=s.value;});
+}
+
+async function selectOrderTemplates(){
+  currentDict = 'order-templates';
+  renderDictMenu();
+  document.getElementById('dict-title').textContent = '🖨 Шаблони наказів';
+  document.getElementById('dict-add-btn').style.display = 'none';
+  const w = document.getElementById('dict-search-wrap');
+  if(w) w.remove();
+  document.getElementById('dict-content').innerHTML = '<div class="empty-state">Завантаження...</div>';
+  await loadOrderTemplatesData();
+  renderOrderTemplatesUI();
+}
+
+function renderOrderTemplatesUI(){
+  const tabs = [
+    {t:1,label:'📥 Зарахування'},
+    {t:2,label:'📤 Відрахування'},
+    {t:3,label:'🏆 Випуск'},
+    {t:4,label:'🔄 Переведення'},
+  ];
+  const list = orderTemplates.filter(t=>t.order_type===templateTab);
+  document.getElementById('dict-content').innerHTML = `
+    <div style="padding:16px">
+      <details style="margin-bottom:18px;border:1px solid var(--border);border-radius:8px;padding:12px">
+        <summary style="cursor:pointer;font-weight:700;font-size:13px">⚙️ Реквізити закладу (для підстановки в накази)</summary>
+        <div class="form-grid" style="margin-top:12px">
+          <div class="form-group" style="grid-column:1/-1"><label>Назва закладу</label><input type="text" id="org-school-name" value="${(orgSettings.school_name||'').replace(/"/g,'&quot;')}"></div>
+          <div class="form-group"><label>ПІБ директора</label><input type="text" id="org-director-fullname" value="${(orgSettings.director_fullname||'').replace(/"/g,'&quot;')}"></div>
+          <div class="form-group"><label>ПІБ директора (давальний)</label><input type="text" id="org-director-fullname-dative" value="${(orgSettings.director_fullname_dative||'').replace(/"/g,'&quot;')}"></div>
+          <div class="form-group"><label>Посада директора</label><input type="text" id="org-director-position" value="${(orgSettings.director_position||'').replace(/"/g,'&quot;')}"></div>
+          <div class="form-group"><label>Посада директора (давальний)</label><input type="text" id="org-director-position-dative" value="${(orgSettings.director_position_dative||'').replace(/"/g,'&quot;')}"></div>
+        </div>
+        <button class="btn btn-primary btn-sm" style="margin-top:8px" onclick="saveOrgSettings()">💾 Зберегти реквізити</button>
+      </details>
+
+      <div style="display:flex;gap:6px;margin-bottom:14px;flex-wrap:wrap">
+        ${tabs.map(tb=>`<button class="btn btn-sm ${templateTab===tb.t?'btn-primary':''}" onclick="templateTab=${tb.t};renderOrderTemplatesUI()">${tb.label}</button>`).join('')}
+        <button class="btn btn-sm" style="margin-left:auto" onclick="openTemplateEditor(null,${templateTab})">+ Новий шаблон</button>
+      </div>
+
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:12px">
+        ${list.length?list.map(t=>`<div class="card" style="padding:12px">
+          <div style="display:flex;justify-content:space-between;align-items:start;gap:6px">
+            <div style="font-weight:600;font-size:13px">${t.name}${t.is_default?' <span class="badge b-green" style="font-size:10px">За замовчуванням</span>':''}</div>
+          </div>
+          <div style="display:flex;gap:6px;margin-top:10px">
+            <button class="btn btn-sm" onclick="openTemplateEditor(${t.id})">✏️ Редагувати</button>
+            ${!t.is_default?`<button class="btn btn-sm" onclick="setDefaultTemplate(${t.id})">⭐ Типовий</button>`:''}
+            <button class="btn btn-sm btn-danger" onclick="deleteTemplate(${t.id})">🗑</button>
+          </div>
+        </div>`).join(''):'<div class="empty-state" style="grid-column:1/-1">Шаблонів цього типу ще немає</div>'}
+      </div>
+    </div>`;
+}
+
+async function saveOrgSettings(){
+  const fields = {
+    school_name: document.getElementById('org-school-name').value.trim(),
+    director_fullname: document.getElementById('org-director-fullname').value.trim(),
+    director_fullname_dative: document.getElementById('org-director-fullname-dative').value.trim(),
+    director_position: document.getElementById('org-director-position').value.trim(),
+    director_position_dative: document.getElementById('org-director-position-dative').value.trim(),
+  };
+  for(const [key,value] of Object.entries(fields)){
+    await fetch(`${SB}/rest/v1/org_settings?key=eq.${key}`, {method:'PATCH', headers:H, body: JSON.stringify({value})});
+    orgSettings[key] = value;
+  }
+  alert('✅ Реквізити збережено');
+}
+
+const TEMPLATE_PLACEHOLDERS = [
+  {tag:'{{номер}}', label:'Номер наказу'},
+  {tag:'{{дата}}', label:'Дата наказу'},
+  {tag:'{{заклад}}', label:'Назва закладу'},
+  {tag:'{{директор}}', label:'ПІБ директора'},
+  {tag:'{{директор_давальний}}', label:'ПІБ директора (давальний)'},
+  {tag:'{{директор_посада}}', label:'Посада директора'},
+  {tag:'{{директор_посада_давальний}}', label:'Посада директора (давальний)'},
+  {tag:'{{група}}', label:'Номер групи (якщо одна на наказ)'},
+  {tag:'{{професія}}', label:'Професія групи'},
+];
+
+function openTemplateEditor(id, orderTypeForNew){
+  editingTemplateId = id;
+  const t = id ? orderTemplates.find(x=>x.id===id) : null;
+  document.getElementById('tmpl-modal-title').textContent = id ? '✏️ Редагування шаблону' : '🆕 Новий шаблон';
+  document.getElementById('tmpl-name').value = t?.name || '';
+  document.getElementById('tmpl-order-type').value = t?.order_type || orderTypeForNew || 1;
+  document.getElementById('tmpl-placeholders').innerHTML = TEMPLATE_PLACEHOLDERS.map(p=>
+    `<button class="btn btn-sm" onclick="insertQuillText('${p.tag}')" title="${p.label}">${p.label}</button>`
+  ).join('') + `<button class="btn btn-sm" style="background:#EEF2FF;color:var(--accent)" onclick="insertQuillText('[ТАБЛИЦЯ_ОСІБ]')">📋 Таблиця осіб</button>`;
+
+  document.getElementById('modal-order-template').classList.add('open');
+  setTimeout(()=>{
+    document.getElementById('quill-editor-container').innerHTML = '';
+    quillEditor = new Quill('#quill-editor-container', {
+      theme: 'snow',
+      modules: { toolbar: [
+        [{header:[1,2,3,false]}],
+        ['bold','italic','underline'],
+        [{align:[]}],
+        [{indent:'-1'},{indent:'+1'}],
+        [{list:'ordered'},{list:'bullet'}],
+        ['clean']
+      ]}
+    });
+    if(t?.html_content) quillEditor.root.innerHTML = t.html_content;
+  }, 50);
+}
+function insertQuillText(text){
+  if(!quillEditor)return;
+  const range = quillEditor.getSelection(true);
+  quillEditor.insertText(range?range.index:quillEditor.getLength(), text, 'user');
+}
+async function saveTemplate(){
+  const name = document.getElementById('tmpl-name').value.trim();
+  if(!name)return alert('Введіть назву шаблону');
+  const orderType = +document.getElementById('tmpl-order-type').value;
+  const html = quillEditor.root.innerHTML;
+  const data = { name, order_type: orderType, html_content: html, editor_login: session.login, edit_time: new Date().toISOString() };
+  if(editingTemplateId){
+    await patch('order_templates', editingTemplateId, data);
+  } else {
+    data.creator_login = session.login;
+    await post('order_templates', data);
+  }
+  closeModal('order-template');
+  await loadOrderTemplatesData();
+  templateTab = orderType;
+  renderOrderTemplatesUI();
+}
+async function deleteTemplate(id){
+  if(!confirm('Видалити цей шаблон?'))return;
+  await del('order_templates', id);
+  await loadOrderTemplatesData();
+  renderOrderTemplatesUI();
+}
+async function setDefaultTemplate(id){
+  const t = orderTemplates.find(x=>x.id===id);
+  if(!t)return;
+  // Знімаємо "типовий" з інших шаблонів цього ж типу наказу
+  const siblings = orderTemplates.filter(x=>x.order_type===t.order_type && x.is_default);
+  for(const s of siblings) await patch('order_templates', s.id, {is_default:false});
+  await patch('order_templates', id, {is_default:true});
+  await loadOrderTemplatesData();
+  renderOrderTemplatesUI();
+}
+
+// ── Заповнення шаблону реальними даними наказу та друк у PDF ──
+async function printOrderAsPdf(orderId){
+  if(typeof pdfMake==='undefined'||typeof htmlToPdfmake==='undefined'){
+    alert('⚠️ Бібліотеки для створення PDF ще завантажуються або не вдалось їх завантажити. Перевірте інтернет-з\'єднання і спробуйте оновити сторінку.');
+    return;
+  }
+  const order=DB.orders.find(o=>o.id===orderId);
+  if(!order)return alert('Наказ не знайдено');
+  await loadOrderTemplatesData();
+  const candidates = orderTemplates.filter(t=>t.order_type===order.order_type);
+  let template = candidates.find(t=>t.is_default) || candidates[0];
+  if(!template){alert('Для цього типу наказу ще немає жодного шаблону. Створіть його в Довідниках → "🖨 Шаблони наказів".');return;}
+
+  const persons = DB.orderIndividuals.filter(oi=>oi.order_id===orderId);
+  const groupIds = [...new Set(persons.map(p=>p.id_groups).filter(Boolean))];
+  const singleGroup = groupIds.length===1 ? DB.groups.find(g=>g.id===groupIds[0]) : null;
+  let professionText = '';
+  if(singleGroup){
+    const profIds = [singleGroup.id_profession_1, singleGroup.id_profession_2, singleGroup.id_profession_3].filter(Boolean);
+    const profsCurrent = await api('professions_current','?order=id');
+    professionText = profIds.map(pid=>profsCurrent.find(p=>p.id===pid)?.name).filter(Boolean).join(', ');
+  }
+
+  const replacements = {
+    '{{номер}}': order.number || '',
+    '{{дата}}': fmtDate(order.date) || '',
+    '{{заклад}}': orgSettings.school_name || '',
+    '{{директор}}': orgSettings.director_fullname || '',
+    '{{директор_давальний}}': orgSettings.director_fullname_dative || '',
+    '{{директор_посада}}': orgSettings.director_position || '',
+    '{{директор_посада_давальний}}': orgSettings.director_position_dative || '',
+    '{{група}}': singleGroup ? singleGroup.group_number : '',
+    '{{професія}}': professionText,
+  };
+
+  let html = template.html_content || '';
+  for(const [tag,val] of Object.entries(replacements)){
+    html = html.split(tag).join(val||'');
+  }
+
+  // Розгортаємо [ТАБЛИЦЯ_ОСІБ] у справжню таблицю
+  const isTransfer = order.order_type===4;
+  const rows = persons.map((p,i)=>{
+    const ind = DB.individuals.find(x=>x.id===p.individual_id);
+    const name = ind ? fullName(ind) : '';
+    const birth = ind ? fmtDate(ind.date_birth) : '';
+    if(isTransfer){
+      const oldG = DB.groups.find(g=>g.id===p.id_groups);
+      const newG = DB.groups.find(g=>g.id===p.id_groups_new);
+      return `<tr><td>${i+1}</td><td>${name}</td><td>Гр. ${oldG?.group_number||''}</td><td>Гр. ${newG?.group_number||''}</td></tr>`;
+    }
+    return `<tr><td>${i+1}</td><td>${name}</td><td>${birth}</td></tr>`;
+  }).join('');
+  const tableHtml = `<table border="1" cellpadding="4" style="border-collapse:collapse;width:100%">
+    <thead><tr>${isTransfer?'<th>№</th><th>ПІБ</th><th>Стара група</th><th>Нова група</th>':'<th>№</th><th>ПІБ</th><th>Дата народження</th>'}</tr></thead>
+    <tbody>${rows}</tbody>
+  </table>`;
+  html = html.split('[ТАБЛИЦЯ_ОСІБ]').join(tableHtml);
+
+  const docDefinition = htmlToPdfmake(html, { window });
+  pdfMake.createPdf({ content: docDefinition, defaultStyle:{font:'Roboto'} }).download(`Наказ_${order.number||orderId}.pdf`);
 }
 
 async function selectDict(key) {
