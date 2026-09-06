@@ -4840,26 +4840,15 @@ function renderDictMenu() {
     if (!groups[d.group]) groups[d.group] = [];
     groups[d.group].push(d);
   });
+  if (!groups['Накази']) groups['Накази'] = [];
+  groups['Накази'].push({key:'order-templates', label:'🖨 Шаблони наказів', _special:true});
   let html = '';
-  {
-    const active = currentDict === 'order-templates';
-    html += `<div style="padding:8px 14px 4px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--muted)">Накази</div>`;
-    html += `<div onclick="selectOrderTemplates()"
-      style="padding:9px 16px;font-size:13px;cursor:pointer;transition:all .15s;
-      background:${active ? '#EEF2FF' : 'transparent'};
-      color:${active ? 'var(--accent)' : 'var(--text)'};
-      font-weight:${active ? '600' : '400'};
-      border-left:3px solid ${active ? 'var(--accent)' : 'transparent'}"
-      onmouseover="if(!${active})this.style.background='#FAFAF8'"
-      onmouseout="if(!${active})this.style.background='transparent'">
-      🖨 Шаблони наказів
-    </div>`;
-  }
   Object.keys(groups).forEach(g => {
     html += `<div style="padding:8px 14px 4px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--muted)">${g}</div>`;
     groups[g].forEach(d => {
-      const active = currentDict && currentDict.key === d.key;
-      html += `<div onclick="selectDict('${d.key}')"
+      const active = d._special ? currentDict === 'order-templates' : (currentDict && currentDict.key === d.key);
+      const onclickFn = d._special ? 'selectOrderTemplates()' : `selectDict('${d.key}')`;
+      html += `<div onclick="${onclickFn}"
         style="padding:9px 16px;font-size:13px;cursor:pointer;transition:all .15s;
         background:${active ? '#EEF2FF' : 'transparent'};
         color:${active ? 'var(--accent)' : 'var(--text)'};
