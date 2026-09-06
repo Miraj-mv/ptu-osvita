@@ -1778,6 +1778,7 @@ th.sortable:hover{background:var(--bg)}
         <div class="form-group"><label>УНЗР</label><input type="text" id="ind-unzr" placeholder="YYYYMMDD-XXXXX"></div>
         <div class="form-group"><label>Телефон</label><input type="text" id="ind-phone" placeholder="+380"></div>
         <div class="form-group"><label>Планова група навчання</label><select id="ind-group-plan"><option value="">— Оберіть —</option></select></div>
+        <div class="form-group"><label>№ заяви в ЄДЕБО</label><input type="text" id="ind-edbo-app" placeholder="79137"></div>
       </div>
       <div style="display:flex;gap:20px;margin-top:12px">
         <label class="checkbox-row"><input type="checkbox" id="ind-social"> Соціальний статус</label>
@@ -1848,6 +1849,7 @@ th.sortable:hover{background:var(--bg)}
         <div class="form-group"><label>УНЗР</label><input type="text" id="ni-unzr" placeholder="YYYYMMDD-XXXXX"></div>
         <div class="form-group"><label>Телефон</label><input type="text" id="ni-phone" placeholder="+380"></div>
         <div class="form-group"><label>Планова група навчання</label><select id="ni-group"><option value="">— Оберіть —</option></select></div>
+        <div class="form-group"><label>№ заяви в ЄДЕБО</label><input type="text" id="ni-edbo-app" placeholder="79137"></div>
       </div>
       <div style="display:flex;gap:20px;margin-top:10px">
         <label class="checkbox-row"><input type="checkbox" id="ni-social"> Соціальний статус</label>
@@ -2190,6 +2192,19 @@ th.sortable:hover{background:var(--bg)}
     <div class="form-group"><label>Назва</label><input type="text" id="eg-name"></div>
     <div class="form-group"><label>Курс</label><select id="eg-cur"><option value="1">1 курс</option><option value="2">2 курс</option><option value="3">3 курс</option><option value="4">4 курс</option></select></div>
     <div class="form-group"><label>Тип групи</label><select id="eg-type"></select></div>
+    <div class="form-group" style="grid-column:1/-1"><hr style="border:none;border-top:1px solid var(--border);margin:4px 0"><label style="font-weight:700;color:var(--muted);font-size:11px;text-transform:uppercase">Дані для наказу про зарахування</label></div>
+    <div class="form-group"><label>ID конкурсної пропозиції в ЄДЕБО</label><input type="text" id="eg-competition-id" placeholder="3692"></div>
+    <div class="form-group"><label>Вступ на основі</label>
+      <select id="eg-education-basis">
+        <option value="Базова середня освіта">Базова середня освіта</option>
+        <option value="Повна загальна середня освіта">Повна загальна середня освіта</option>
+      </select>
+    </div>
+    <div class="form-group"><label>Освітньо-кваліфікаційний рівень</label><input type="text" id="eg-qualification-level" placeholder="ОК спеціаліст"></div>
+    <div class="form-group"><label>Форма навчання</label><input type="text" id="eg-study-form" placeholder="Денна"></div>
+    <div class="form-group"><label>Період навчання — початок</label><input type="date" id="eg-period-start"></div>
+    <div class="form-group"><label>Період навчання — кінець</label><input type="date" id="eg-period-end"></div>
+    <div class="form-group" style="grid-column:1/-1"><label>Строк навчання (текстом)</label><input type="text" id="eg-duration-text" placeholder="3 р. 7 міс."></div>
   </div></div>
   <div class="modal-footer"><div></div><div style="display:flex;gap:8px">
     <button class="btn" onclick="closeModal('edit-group')">Скасувати</button>
@@ -2327,7 +2342,7 @@ async function startApp(){
 
 async function loadAll(){
   const [individuals,groups,subjects,teachers,years,subjectTypes,pupils,orders,orderInds,nationalities,cities,docTypes,relTypes,groupTypes,regions,districts,tcs,issuedBy,allDocuments]=await Promise.all([
-    api('individual','?select=id,surname,name,middle_name,date_birth,rnokpp,phone_number,id_group_planning,unzr,is_edbo,editor_login,edit_time,create_time&order=surname'),
+    api('individual','?select=id,surname,name,middle_name,date_birth,rnokpp,phone_number,id_group_planning,unzr,is_edbo,edbo_application_number,editor_login,edit_time,create_time&order=surname'),
     api('groups','?order=id'),
     api('subjects','?order=subjects_title'),
     api('teachers','?select=id,surname,name,middle_name,date_birth,login&order=surname'),
@@ -3648,6 +3663,7 @@ async function openIndividualCard(id){
   document.getElementById('ind-nationality').value=full.nationality_id||'';
   document.getElementById('ind-rnokpp').value=full.rnokpp||'';
   document.getElementById('ind-unzr').value=full.unzr||'';
+  document.getElementById('ind-edbo-app').value=full.edbo_application_number||'';
   document.getElementById('ind-phone').value=full.phone_number||'';
   document.getElementById('ind-group-plan').value=full.id_group_planning||'';
   document.getElementById('ind-social').checked=!!full.is_social_status;
@@ -3870,6 +3886,7 @@ async function saveIndividualCard(){
     nationality_id:document.getElementById('ind-nationality').value?parseInt(document.getElementById('ind-nationality').value):null,
     rnokpp:document.getElementById('ind-rnokpp').value.trim()||null,
     unzr:document.getElementById('ind-unzr').value.trim()||null,
+    edbo_application_number:document.getElementById('ind-edbo-app').value.trim()||null,
     phone_number:document.getElementById('ind-phone').value.trim()||null,
     id_group_planning:document.getElementById('ind-group-plan').value?parseInt(document.getElementById('ind-group-plan').value):null,
     is_social_status:document.getElementById('ind-social').checked,
@@ -4004,7 +4021,7 @@ function addNiRelative(){niRelatives.push({_new:true});renderNiRelatives();}
 
 function openAddIndividual(){
   niAddresses=[];niDocs=[];niRelatives=[];
-  ['ni-sur','ni-name','ni-mid','ni-rnokpp','ni-unzr','ni-phone'].forEach(id=>document.getElementById(id).value='');
+  ['ni-sur','ni-name','ni-mid','ni-rnokpp','ni-unzr','ni-phone','ni-edbo-app'].forEach(id=>document.getElementById(id).value='');
   document.getElementById('ni-birth').value='';
   document.getElementById('ni-sex').value='1';
   document.getElementById('ni-nationality').value='';
@@ -4058,6 +4075,7 @@ async function saveNewIndividual(){
       nationality_id:document.getElementById('ni-nationality').value?parseInt(document.getElementById('ni-nationality').value):null,
       rnokpp:document.getElementById('ni-rnokpp').value.trim()||null,
       unzr:document.getElementById('ni-unzr').value.trim()||null,
+      edbo_application_number:document.getElementById('ni-edbo-app').value.trim()||null,
       phone_number:document.getElementById('ni-phone').value.trim()||null,
       id_group_planning:document.getElementById('ni-group').value?parseInt(document.getElementById('ni-group').value):null,
       is_social_status:document.getElementById('ni-social').checked,
@@ -4565,6 +4583,13 @@ function openEditGroup(id){
   document.getElementById('eg-name').value = g.name||'';
   document.getElementById('eg-cur').value = g.curriculum||1;
   document.getElementById('eg-type').value = g.id_groups_type||2;
+  document.getElementById('eg-competition-id').value = g.competition_id||'';
+  document.getElementById('eg-education-basis').value = g.education_basis||'Базова середня освіта';
+  document.getElementById('eg-qualification-level').value = g.qualification_level||'ОК спеціаліст';
+  document.getElementById('eg-study-form').value = g.study_form||'Денна';
+  document.getElementById('eg-period-start').value = g.study_period_start||'';
+  document.getElementById('eg-period-end').value = g.study_period_end||'';
+  document.getElementById('eg-duration-text').value = g.study_duration_text||'';
   openModal('edit-group');
 }
 
@@ -4577,6 +4602,13 @@ async function updateGroup(){
     name: document.getElementById('eg-name').value.trim(),
     curriculum: parseInt(document.getElementById('eg-cur').value),
     id_groups_type: parseInt(document.getElementById('eg-type').value),
+    competition_id: document.getElementById('eg-competition-id').value.trim()||null,
+    education_basis: document.getElementById('eg-education-basis').value||null,
+    qualification_level: document.getElementById('eg-qualification-level').value.trim()||null,
+    study_form: document.getElementById('eg-study-form').value.trim()||null,
+    study_period_start: document.getElementById('eg-period-start').value||null,
+    study_period_end: document.getElementById('eg-period-end').value||null,
+    study_duration_text: document.getElementById('eg-duration-text').value.trim()||null,
   };
   await patch('groups', editingGroupId, data);
   const idx = DB.groups.findIndex(g=>g.id===editingGroupId);
@@ -4906,6 +4938,7 @@ function renderOrderTemplatesUI(){
         <summary style="cursor:pointer;font-weight:700;font-size:13px">⚙️ Реквізити закладу (для підстановки в накази)</summary>
         <div class="form-grid" style="margin-top:12px">
           <div class="form-group" style="grid-column:1/-1"><label>Назва закладу</label><input type="text" id="org-school-name" value="${(orgSettings.school_name||'').replace(/"/g,'&quot;')}"></div>
+          <div class="form-group"><label>Населений пункт</label><input type="text" id="org-location" value="${(orgSettings.location||'').replace(/"/g,'&quot;')}" placeholder="Мала Виска"></div>
           <div class="form-group"><label>ПІБ директора</label><input type="text" id="org-director-fullname" value="${(orgSettings.director_fullname||'').replace(/"/g,'&quot;')}"></div>
           <div class="form-group"><label>ПІБ директора (давальний)</label><input type="text" id="org-director-fullname-dative" value="${(orgSettings.director_fullname_dative||'').replace(/"/g,'&quot;')}"></div>
           <div class="form-group"><label>Посада директора</label><input type="text" id="org-director-position" value="${(orgSettings.director_position||'').replace(/"/g,'&quot;')}"></div>
@@ -4937,6 +4970,7 @@ function renderOrderTemplatesUI(){
 async function saveOrgSettings(){
   const fields = {
     school_name: document.getElementById('org-school-name').value.trim(),
+    location: document.getElementById('org-location').value.trim(),
     director_fullname: document.getElementById('org-director-fullname').value.trim(),
     director_fullname_dative: document.getElementById('org-director-fullname-dative').value.trim(),
     director_position: document.getElementById('org-director-position').value.trim(),
@@ -4953,12 +4987,13 @@ const TEMPLATE_PLACEHOLDERS = [
   {tag:'{{номер}}', label:'Номер наказу'},
   {tag:'{{дата}}', label:'Дата наказу'},
   {tag:'{{заклад}}', label:'Назва закладу'},
+  {tag:'{{населений_пункт}}', label:'Населений пункт'},
   {tag:'{{директор}}', label:'ПІБ директора'},
   {tag:'{{директор_давальний}}', label:'ПІБ директора (давальний)'},
   {tag:'{{директор_посада}}', label:'Посада директора'},
   {tag:'{{директор_посада_давальний}}', label:'Посада директора (давальний)'},
   {tag:'{{група}}', label:'Номер групи (якщо одна на наказ)'},
-  {tag:'{{професія}}', label:'Професія групи'},
+  {tag:'{{професія}}', label:'Професія групи (якщо одна на наказ)'},
 ];
 
 function openTemplateEditor(id, orderTypeForNew){
@@ -4969,7 +5004,9 @@ function openTemplateEditor(id, orderTypeForNew){
   document.getElementById('tmpl-order-type').value = t?.order_type || orderTypeForNew || 1;
   document.getElementById('tmpl-placeholders').innerHTML = TEMPLATE_PLACEHOLDERS.map(p=>
     `<button class="btn btn-sm" onclick="insertQuillText('${p.tag}')" title="${p.label}">${p.label}</button>`
-  ).join('') + `<button class="btn btn-sm" style="background:#EEF2FF;color:var(--accent)" onclick="insertQuillText('[ТАБЛИЦЯ_ОСІБ]')">📋 Таблиця осіб</button>`;
+  ).join('')
+    + `<button class="btn btn-sm" style="background:#EEF2FF;color:var(--accent)" onclick="insertQuillText('[ТАБЛИЦЯ_ОСІБ]')">📋 Проста таблиця осіб</button>`
+    + `<button class="btn btn-sm" style="background:#EEF2FF;color:var(--accent)" onclick="insertQuillText('[ДОДАТКИ_ПО_ГРУПАХ]')">📑 Додатки по групах (як в офіційній формі)</button>`;
 
   document.getElementById('modal-order-template').classList.add('open');
   setTimeout(()=>{
@@ -5042,24 +5079,25 @@ async function printOrderAsPdf(orderId){
 
   const persons = DB.orderIndividuals.filter(oi=>oi.order_id===orderId);
   const groupIds = [...new Set(persons.map(p=>p.id_groups).filter(Boolean))];
-  const singleGroup = groupIds.length===1 ? DB.groups.find(g=>g.id===groupIds[0]) : null;
-  let professionText = '';
-  if(singleGroup){
-    const profIds = [singleGroup.id_profession_1, singleGroup.id_profession_2, singleGroup.id_profession_3].filter(Boolean);
-    const profsCurrent = await api('professions_current','?order=id');
-    professionText = profIds.map(pid=>profsCurrent.find(p=>p.id===pid)?.name).filter(Boolean).join(', ');
-  }
+  const groupsInOrder = groupIds.map(gid=>DB.groups.find(g=>g.id===gid)).filter(Boolean)
+    .sort((a,b)=>(a.group_number||'').localeCompare(b.group_number||'',undefined,{numeric:true}));
+  const singleGroup = groupsInOrder.length===1 ? groupsInOrder[0] : null;
+
+  const profsCurrent = await api('professions_current','?order=id');
+  const groupProfessionText = g => [g.id_profession_1,g.id_profession_2,g.id_profession_3]
+    .filter(Boolean).map(pid=>profsCurrent.find(p=>p.id===pid)?.name).filter(Boolean).join(', ');
 
   const replacements = {
     '{{номер}}': order.number || '',
     '{{дата}}': fmtDate(order.date) || '',
     '{{заклад}}': orgSettings.school_name || '',
+    '{{населений_пункт}}': orgSettings.location || '',
     '{{директор}}': orgSettings.director_fullname || '',
     '{{директор_давальний}}': orgSettings.director_fullname_dative || '',
     '{{директор_посада}}': orgSettings.director_position || '',
     '{{директор_посада_давальний}}': orgSettings.director_position_dative || '',
     '{{група}}': singleGroup ? singleGroup.group_number : '',
-    '{{професія}}': professionText,
+    '{{професія}}': singleGroup ? groupProfessionText(singleGroup) : '',
   };
 
   let html = template.html_content || '';
@@ -5067,8 +5105,10 @@ async function printOrderAsPdf(orderId){
     html = html.split(tag).join(val||'');
   }
 
-  // Розгортаємо [ТАБЛИЦЯ_ОСІБ] у справжню таблицю
   const isTransfer = order.order_type===4;
+  const usesGroupAppendices = html.includes('[ДОДАТКИ_ПО_ГРУПАХ]');
+
+  // Розгортаємо [ТАБЛИЦЯ_ОСІБ] у просту таблицю (для наказів без додатків по групах)
   const rows = persons.map((p,i)=>{
     const ind = DB.individuals.find(x=>x.id===p.individual_id);
     const name = ind ? fullName(ind) : '';
@@ -5085,9 +5125,73 @@ async function printOrderAsPdf(orderId){
     <tbody>${rows}</tbody>
   </table>`;
   html = html.split('[ТАБЛИЦЯ_ОСІБ]').join(tableHtml);
+  html = html.split('[ДОДАТКИ_ПО_ГРУПАХ]').join(''); // цей текстовий токен прибираємо — додатки будуються нижче окремо як pdfmake-контент
 
-  const docDefinition = htmlToPdfmake(html, { window });
-  pdfMake.createPdf({ content: docDefinition, defaultStyle:{font:'Roboto'} }).download(`Наказ_${order.number||orderId}.pdf`);
+  const mainContent = htmlToPdfmake(html, { window });
+  let fullContent = mainContent;
+
+  if(usesGroupAppendices && groupsInOrder.length){
+    // Довантажуємо документи про освіту всіх осіб наказу для колонки "документ про освіту"
+    const indIds = persons.map(p=>p.individual_id);
+    const allDocs = await api('documents', `?individual_id=in.(${indIds.join(',')})&order=individual_id`);
+    const docTypeById = Object.fromEntries(DB.docTypes.map(t=>[t.id,t]));
+    const docsByInd = {};
+    (allDocs||[]).forEach(d=>{(docsByInd[d.individual_id]=docsByInd[d.individual_id]||[]).push(d);});
+    const bestOsvitaDoc = individualId=>{
+      const docs=(docsByInd[individualId]||[]).filter(d=>{
+        const t=docTypeById[d.doc_type_id];
+        return t && t.osvita===true && !d.iscanceled;
+      });
+      if(!docs.length)return null;
+      docs.sort((a,b)=>new Date(b.date_issue||0)-new Date(a.date_issue||0));
+      return docs[0];
+    };
+
+    let runningNum = 0;
+    groupsInOrder.forEach((g,gi)=>{
+      const groupPersons = persons.filter(p=>p.id_groups===g.id);
+      const appendixContent = [
+        {text:'', pageBreak:'before'},
+        {text:`Додаток №${gi+1} до наказу про зарахування на навчання`, alignment:'right', fontSize:10},
+        {text:`від ${fmtDate(order.date)} №${order.number||''}`, alignment:'right', fontSize:10, margin:[0,0,0,10]},
+        {text:`Вступ на основі: ${g.education_basis||''}`, fontSize:10},
+        {text:`ID конкурсної пропозиції в ЄДЕБО: ${g.competition_id||''}`, fontSize:10},
+        {text:`Освітньо-кваліфікаційний рівень: ${g.qualification_level||''}`, fontSize:10},
+        {text:`Форма навчання: ${g.study_form||''}`, fontSize:10},
+        {text:`Період навчання: ${g.study_period_start&&g.study_period_end?'з '+fmtDate(g.study_period_start)+' по '+fmtDate(g.study_period_end):''}`, fontSize:10},
+        {text:`Строк навчання: ${g.study_duration_text||''}`, fontSize:10, margin:[0,0,0,8]},
+        {text:`Професії, що здобуваються: ${groupProfessionText(g)}`, fontSize:10, margin:[0,0,0,10]},
+        {
+          table:{
+            headerRows:1,
+            widths:[22,45,'*','*','*','*'],
+            body:[
+              [{text:'№ п/п',fontSize:8,bold:true},{text:'№ заяви в ЄДЕБО',fontSize:8,bold:true},{text:'Прізвище',fontSize:8,bold:true},{text:"Ім'я",fontSize:8,bold:true},{text:'По батькові',fontSize:8,bold:true},{text:'Документ про освіту',fontSize:8,bold:true}],
+              ...groupPersons.map(p=>{
+                runningNum++;
+                const ind = DB.individuals.find(x=>x.id===p.individual_id) || {};
+                const doc = bestOsvitaDoc(p.individual_id);
+                const docType = doc ? (docTypeById[doc.doc_type_id]?.doc_type||'') : '';
+                const docInfo = doc ? [doc.doc_serial,doc.doc_number].filter(Boolean).join(' ')+(doc.date_issue?(', '+fmtDate(doc.date_issue)):'') : '';
+                return [
+                  {text:String(runningNum),fontSize:8},
+                  {text:ind.edbo_application_number||'',fontSize:8},
+                  {text:ind.surname||'',fontSize:8},
+                  {text:ind.name||'',fontSize:8},
+                  {text:ind.middle_name||'',fontSize:8},
+                  {text:(docType+(docInfo?'\n'+docInfo:'')).trim(),fontSize:8},
+                ];
+              }),
+            ]
+          },
+          layout:'lightHorizontalLines'
+        }
+      ];
+      fullContent = fullContent.concat(appendixContent);
+    });
+  }
+
+  pdfMake.createPdf({ content: fullContent, defaultStyle:{font:'Roboto', fontSize:11} }).download(`Наказ_${order.number||orderId}.pdf`);
 }
 
 async function selectDict(key) {
