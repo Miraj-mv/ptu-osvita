@@ -2124,6 +2124,20 @@ th.sortable:hover{background:var(--bg)}
   </div></div>
 </div></div>
 
+<div class="modal-overlay" id="modal-copy-campaign"><div class="modal modal-sm">
+  <div class="modal-header">
+    <div class="modal-title" id="cc-title">📋 Копіювати пропозицію</div>
+    <button class="modal-close" onclick="closeModal('copy-campaign')">✕</button>
+  </div>
+  <div class="modal-body">
+    <div class="form-group"><label>Скопіювати на навчальний рік</label><select id="cc-year"></select></div>
+  </div>
+  <div class="modal-footer"><div></div><div style="display:flex;gap:8px">
+    <button class="btn" onclick="closeModal('copy-campaign')">Скасувати</button>
+    <button class="btn btn-primary" onclick="confirmCopyCampaign()">📋 Копіювати</button>
+  </div></div>
+</div></div>
+
 <div class="modal-overlay" id="modal-order-template"><div class="modal" style="width:min(900px,96vw)">
   <div class="modal-header">
     <div class="modal-title" id="tmpl-modal-title">🖨 Шаблон наказу</div>
@@ -4932,9 +4946,19 @@ async function loadOrderTemplatesData(){
 
 // ══════════════════ ВСТУПНА КАМПАНІЯ (КОНКУРСНІ ПРОПОЗИЦІЇ) ══════════════════
 let admissionCampaigns = [];
+let campaignYearFilter = null;
 async function loadAdmissionCampaigns(){
   const data = await api('admission_campaigns','?order=id');
   admissionCampaigns = Array.isArray(data)?data:[];
+}
+function yearLabel(y){
+  if(!y)return '';
+  return fmtDate(y.date_start).slice(3)+' — '+fmtDate(y.date_end).slice(3); // ММ.РРРР — ММ.РРРР спрощено нижче
+}
+function yearLabelFull(y){
+  if(!y)return '';
+  const sy=new Date(y.date_start).getFullYear(), ey=new Date(y.date_end).getFullYear();
+  return `${sy}/${ey}`;
 }
 async function selectAdmissionCampaigns(){
   currentDict = 'admission-campaigns';
@@ -4945,14 +4969,26 @@ async function selectAdmissionCampaigns(){
   if(w) w.remove();
   document.getElementById('dict-content').innerHTML = '<div class="empty-state">Завантаження...</div>';
   await loadAdmissionCampaigns();
+  if(campaignYearFilter==null){
+    const active = DB.years.find(y=>y.active);
+    campaignYearFilter = active ? active.id : (DB.years[DB.years.length-1]?.id||null);
+  }
   renderAdmissionCampaignsUI();
 }
 function renderAdmissionCampaignsUI(){
-  const rows = DB.groups.map(g=>({g, c: admissionCampaigns.find(x=>x.id_groups===g.id)}))
+  const sortedYears = [...DB.years].sort((a,b)=>new Date(b.date_start)-new Date(a.date_start));
+  const yearCampaigns = admissionCampaigns.filter(c=>c.id_academic_year===campaignYearFilter);
+  const rows = DB.groups.map(g=>({g, c: yearCampaigns.find(x=>x.id_groups===g.id)}))
     .sort((a,b)=>(a.g.group_number||'').localeCompare(b.g.group_number||'',undefined,{numeric:true}));
   document.getElementById('dict-content').innerHTML = `
     <div style="padding:16px">
-      <div style="font-size:12px;color:var(--muted);margin-bottom:14px">Дані вступної кампанії для кожної групи — використовуються при друку наказу про зарахування (розділ "Додатки по групах").</div>
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">
+        <label style="font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase">Навчальний рік:</label>
+        <select onchange="campaignYearFilter=+this.value;renderAdmissionCampaignsUI()" style="padding:7px 11px;font-size:13px;border:1px solid var(--border);border-radius:8px;font-family:var(--font);outline:none">
+          ${sortedYears.map(y=>`<option value="${y.id}" ${campaignYearFilter===y.id?'selected':''}>${yearLabelFull(y)}${y.active?' (поточний)':''}</option>`).join('')}
+        </select>
+      </div>
+      <div style="font-size:12px;color:var(--muted);margin-bottom:14px">Дані вступної кампанії для кожної групи за обраний рік — використовуються при друку наказу про зарахування (розділ "Додатки по групах").</div>
       <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px">
         ${rows.map(({g,c})=>`<div class="card" style="padding:12px">
           <div style="font-weight:700;font-size:13px">Група ${g.group_number}${g.name&&g.name!==g.group_number?' — '+g.name:''}</div>
@@ -4961,7 +4997,11 @@ function renderAdmissionCampaignsUI(){
             ${c.education_basis||'—'}<br>
             ${c.study_period_start&&c.study_period_end?fmtDate(c.study_period_start)+' — '+fmtDate(c.study_period_end):'Період не вказано'}
           </div>`:'<div style="font-size:12px;color:var(--muted);margin-top:6px">Дані ще не заповнені</div>'}
-          <button class="btn btn-sm" style="margin-top:10px" onclick="openAdmissionCampaignEditor(${g.id})">✏️ Редагувати</button>
+          <div style="display:flex;gap:6px;margin-top:10px;flex-wrap:wrap">
+            <button class="btn btn-sm" onclick="openAdmissionCampaignEditor(${g.id})">✏️ ${c?'Редагувати':'Додати'}</button>
+            ${c?`<button class="btn btn-sm" onclick="openCopyCampaignModal(${c.id})">📋 Копіювати в рік</button>
+            <button class="btn btn-sm btn-danger" onclick="deleteAdmissionCampaign(${c.id})">🗑</button>`:''}
+          </div>
         </div>`).join('')}
       </div>
     </div>`;
@@ -4971,8 +5011,9 @@ function openAdmissionCampaignEditor(groupId){
   const g = DB.groups.find(x=>x.id===groupId);
   if(!g) return;
   editingCampaignGroupId = groupId;
-  const c = admissionCampaigns.find(x=>x.id_groups===groupId) || {};
-  document.getElementById('ac-modal-title').textContent = `🎓 Конкурсна пропозиція — Група ${g.group_number}`;
+  const c = admissionCampaigns.find(x=>x.id_groups===groupId && x.id_academic_year===campaignYearFilter) || {};
+  const y = DB.years.find(x=>x.id===campaignYearFilter);
+  document.getElementById('ac-modal-title').textContent = `🎓 Конкурсна пропозиція — Група ${g.group_number} (${yearLabelFull(y)})`;
   document.getElementById('ac-competition-id').value = c.competition_id||'';
   document.getElementById('ac-education-basis').value = c.education_basis||'Базова середня освіта';
   document.getElementById('ac-qualification-level').value = c.qualification_level||'ОК спеціаліст';
@@ -4986,6 +5027,7 @@ async function saveAdmissionCampaign(){
   if(!editingCampaignGroupId) return;
   const data = {
     id_groups: editingCampaignGroupId,
+    id_academic_year: campaignYearFilter,
     competition_id: document.getElementById('ac-competition-id').value.trim()||null,
     education_basis: document.getElementById('ac-education-basis').value||null,
     qualification_level: document.getElementById('ac-qualification-level').value.trim()||null,
@@ -4996,7 +5038,7 @@ async function saveAdmissionCampaign(){
     editor_login: session.login,
     edit_time: new Date().toISOString(),
   };
-  const existing = admissionCampaigns.find(x=>x.id_groups===editingCampaignGroupId);
+  const existing = admissionCampaigns.find(x=>x.id_groups===editingCampaignGroupId && x.id_academic_year===campaignYearFilter);
   if(existing){
     await patch('admission_campaigns', existing.id, data);
     Object.assign(existing, data);
@@ -5006,6 +5048,56 @@ async function saveAdmissionCampaign(){
     if(rec) admissionCampaigns.push(rec);
   }
   closeModal('admission-campaign');
+  renderAdmissionCampaignsUI();
+}
+async function deleteAdmissionCampaign(campaignId){
+  if(!confirm('Видалити цю конкурсну пропозицію?'))return;
+  await del('admission_campaigns', campaignId);
+  admissionCampaigns = admissionCampaigns.filter(x=>x.id!==campaignId);
+  renderAdmissionCampaignsUI();
+}
+let copyingCampaignId = null;
+function openCopyCampaignModal(campaignId){
+  copyingCampaignId = campaignId;
+  const c = admissionCampaigns.find(x=>x.id===campaignId);
+  if(!c)return;
+  const g = DB.groups.find(x=>x.id===c.id_groups);
+  const sortedYears = [...DB.years].sort((a,b)=>new Date(b.date_start)-new Date(a.date_start));
+  document.getElementById('cc-title').textContent = `📋 Копіювати пропозицію — Група ${g?.group_number||''}`;
+  document.getElementById('cc-year').innerHTML = sortedYears
+    .filter(y=>y.id!==c.id_academic_year)
+    .map(y=>`<option value="${y.id}">${yearLabelFull(y)}${y.active?' (поточний)':''}</option>`).join('');
+  document.getElementById('modal-copy-campaign').classList.add('open');
+}
+async function confirmCopyCampaign(){
+  const c = admissionCampaigns.find(x=>x.id===copyingCampaignId);
+  if(!c)return;
+  const targetYear = +document.getElementById('cc-year').value;
+  const existing = admissionCampaigns.find(x=>x.id_groups===c.id_groups && x.id_academic_year===targetYear);
+  if(existing && !confirm('Для цієї групи вже є пропозиція на обраний рік. Перезаписати?'))return;
+  const data = {
+    id_groups: c.id_groups,
+    id_academic_year: targetYear,
+    competition_id: c.competition_id,
+    education_basis: c.education_basis,
+    qualification_level: c.qualification_level,
+    study_form: c.study_form,
+    study_period_start: c.study_period_start,
+    study_period_end: c.study_period_end,
+    study_duration_text: c.study_duration_text,
+    editor_login: session.login,
+    edit_time: new Date().toISOString(),
+  };
+  if(existing){
+    await patch('admission_campaigns', existing.id, data);
+    Object.assign(existing, data);
+  } else {
+    const res = await post('admission_campaigns', data);
+    const rec = Array.isArray(res)?res[0]:res;
+    if(rec) admissionCampaigns.push(rec);
+  }
+  closeModal('copy-campaign');
+  alert('✅ Скопійовано');
   renderAdmissionCampaignsUI();
 }
 
@@ -5244,10 +5336,15 @@ async function printOrderAsPdf(orderId){
       return docs[0];
     };
     const campaigns = await api('admission_campaigns', `?id_groups=in.(${groupsInOrder.map(g=>g.id).join(',')})`);
+    // Визначаємо навчальний рік, що відповідає даті наказу
+    const orderDate = order.date ? new Date(order.date) : new Date();
+    const matchingYear = DB.years.find(y=>orderDate>=new Date(y.date_start) && orderDate<=new Date(y.date_end));
 
     let runningNum = 0;
     groupsInOrder.forEach((g,gi)=>{
-      const camp = (campaigns||[]).find(c=>c.id_groups===g.id) || {};
+      const campsForGroup = (campaigns||[]).filter(c=>c.id_groups===g.id);
+      const camp = (matchingYear ? campsForGroup.find(c=>c.id_academic_year===matchingYear.id) : null)
+        || campsForGroup[0] || {};
       const groupPersons = persons.filter(p=>p.id_groups===g.id);
       const appendixContent = [
         {text:'', pageBreak:'before'},
