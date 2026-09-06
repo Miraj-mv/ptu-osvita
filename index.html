@@ -2098,6 +2098,32 @@ th.sortable:hover{background:var(--bg)}
 </div></div>
 
 <!-- РЕДАКТОР ШАБЛОНУ НАКАЗУ -->
+<!-- ВСТУПНА КАМПАНІЯ: РЕДАГУВАННЯ КОНКУРСНОЇ ПРОПОЗИЦІЇ -->
+<div class="modal-overlay" id="modal-admission-campaign"><div class="modal" style="width:min(560px,96vw)">
+  <div class="modal-header">
+    <div class="modal-title" id="ac-modal-title">🎓 Конкурсна пропозиція</div>
+    <button class="modal-close" onclick="closeModal('admission-campaign')">✕</button>
+  </div>
+  <div class="modal-body"><div class="form-grid">
+    <div class="form-group"><label>ID конкурсної пропозиції в ЄДЕБО</label><input type="text" id="ac-competition-id" placeholder="3692"></div>
+    <div class="form-group"><label>Вступ на основі</label>
+      <select id="ac-education-basis">
+        <option value="Базова середня освіта">Базова середня освіта</option>
+        <option value="Повна загальна середня освіта">Повна загальна середня освіта</option>
+      </select>
+    </div>
+    <div class="form-group"><label>Освітньо-кваліфікаційний рівень</label><input type="text" id="ac-qualification-level" placeholder="ОК спеціаліст"></div>
+    <div class="form-group"><label>Форма навчання</label><input type="text" id="ac-study-form" placeholder="Денна"></div>
+    <div class="form-group"><label>Період навчання — початок</label><input type="date" id="ac-period-start"></div>
+    <div class="form-group"><label>Період навчання — кінець</label><input type="date" id="ac-period-end"></div>
+    <div class="form-group" style="grid-column:1/-1"><label>Строк навчання (текстом)</label><input type="text" id="ac-duration-text" placeholder="3 р. 7 міс."></div>
+  </div></div>
+  <div class="modal-footer"><div></div><div style="display:flex;gap:8px">
+    <button class="btn" onclick="closeModal('admission-campaign')">Скасувати</button>
+    <button class="btn btn-primary" onclick="saveAdmissionCampaign()">💾 Зберегти</button>
+  </div></div>
+</div></div>
+
 <div class="modal-overlay" id="modal-order-template"><div class="modal" style="width:min(900px,96vw)">
   <div class="modal-header">
     <div class="modal-title" id="tmpl-modal-title">🖨 Шаблон наказу</div>
@@ -2185,26 +2211,16 @@ th.sortable:hover{background:var(--bg)}
   </div>
 </div></div>
 
-<div class="modal-overlay" id="modal-edit-group"><div class="modal" style="width:min(640px,96vw)">
+<div class="modal-overlay" id="modal-edit-group"><div class="modal" style="width:min(560px,96vw)">
   <div class="modal-header"><div class="modal-title">✏️ Редагувати групу</div><button class="modal-close" onclick="closeModal('edit-group')">✕</button></div>
   <div class="modal-body"><div class="form-grid">
     <div class="form-group"><label>Номер *</label><input type="text" id="eg-num"></div>
     <div class="form-group"><label>Назва</label><input type="text" id="eg-name"></div>
     <div class="form-group"><label>Курс</label><select id="eg-cur"><option value="1">1 курс</option><option value="2">2 курс</option><option value="3">3 курс</option><option value="4">4 курс</option></select></div>
     <div class="form-group"><label>Тип групи</label><select id="eg-type"></select></div>
-    <div class="form-group" style="grid-column:1/-1"><hr style="border:none;border-top:1px solid var(--border);margin:4px 0"><label style="font-weight:700;color:var(--muted);font-size:11px;text-transform:uppercase">Дані для наказу про зарахування</label></div>
-    <div class="form-group"><label>ID конкурсної пропозиції в ЄДЕБО</label><input type="text" id="eg-competition-id" placeholder="3692"></div>
-    <div class="form-group"><label>Вступ на основі</label>
-      <select id="eg-education-basis">
-        <option value="Базова середня освіта">Базова середня освіта</option>
-        <option value="Повна загальна середня освіта">Повна загальна середня освіта</option>
-      </select>
-    </div>
-    <div class="form-group"><label>Освітньо-кваліфікаційний рівень</label><input type="text" id="eg-qualification-level" placeholder="ОК спеціаліст"></div>
-    <div class="form-group"><label>Форма навчання</label><input type="text" id="eg-study-form" placeholder="Денна"></div>
-    <div class="form-group"><label>Період навчання — початок</label><input type="date" id="eg-period-start"></div>
-    <div class="form-group"><label>Період навчання — кінець</label><input type="date" id="eg-period-end"></div>
-    <div class="form-group" style="grid-column:1/-1"><label>Строк навчання (текстом)</label><input type="text" id="eg-duration-text" placeholder="3 р. 7 міс."></div>
+    <div class="form-group" style="grid-column:1/-1"><label>Професія 1</label><select id="eg-prof1"><option value="">— Оберіть —</option></select></div>
+    <div class="form-group" style="grid-column:1/-1"><label>Професія 2</label><select id="eg-prof2"><option value="">— Оберіть —</option></select></div>
+    <div class="form-group" style="grid-column:1/-1"><label>Професія 3</label><select id="eg-prof3"><option value="">— Оберіть —</option></select></div>
   </div></div>
   <div class="modal-footer"><div></div><div style="display:flex;gap:8px">
     <button class="btn" onclick="closeModal('edit-group')">Скасувати</button>
@@ -4575,7 +4591,17 @@ function renderGroups(){
 
 let editingGroupId = null;
 
-function openEditGroup(id){
+async function populateProfessionSelects(selectedIds){
+  if(!DB.professionsCurrent){
+    DB.professionsCurrent = await api('professions_current','?order=id');
+  }
+  const opts = '<option value="">— Оберіть —</option>' + DB.professionsCurrent.map(p=>`<option value="${p.id}">${p.name}</option>`).join('');
+  ['eg-prof1','eg-prof2','eg-prof3'].forEach((id,i)=>{
+    document.getElementById(id).innerHTML = opts;
+    document.getElementById(id).value = selectedIds[i]||'';
+  });
+}
+async function openEditGroup(id){
   const g = DB.groups.find(x=>x.id===id);
   if(!g) return;
   editingGroupId = id;
@@ -4583,13 +4609,7 @@ function openEditGroup(id){
   document.getElementById('eg-name').value = g.name||'';
   document.getElementById('eg-cur').value = g.curriculum||1;
   document.getElementById('eg-type').value = g.id_groups_type||2;
-  document.getElementById('eg-competition-id').value = g.competition_id||'';
-  document.getElementById('eg-education-basis').value = g.education_basis||'Базова середня освіта';
-  document.getElementById('eg-qualification-level').value = g.qualification_level||'ОК спеціаліст';
-  document.getElementById('eg-study-form').value = g.study_form||'Денна';
-  document.getElementById('eg-period-start').value = g.study_period_start||'';
-  document.getElementById('eg-period-end').value = g.study_period_end||'';
-  document.getElementById('eg-duration-text').value = g.study_duration_text||'';
+  await populateProfessionSelects([g.id_profession_1, g.id_profession_2, g.id_profession_3]);
   openModal('edit-group');
 }
 
@@ -4602,13 +4622,9 @@ async function updateGroup(){
     name: document.getElementById('eg-name').value.trim(),
     curriculum: parseInt(document.getElementById('eg-cur').value),
     id_groups_type: parseInt(document.getElementById('eg-type').value),
-    competition_id: document.getElementById('eg-competition-id').value.trim()||null,
-    education_basis: document.getElementById('eg-education-basis').value||null,
-    qualification_level: document.getElementById('eg-qualification-level').value.trim()||null,
-    study_form: document.getElementById('eg-study-form').value.trim()||null,
-    study_period_start: document.getElementById('eg-period-start').value||null,
-    study_period_end: document.getElementById('eg-period-end').value||null,
-    study_duration_text: document.getElementById('eg-duration-text').value.trim()||null,
+    id_profession_1: document.getElementById('eg-prof1').value?+document.getElementById('eg-prof1').value:null,
+    id_profession_2: document.getElementById('eg-prof2').value?+document.getElementById('eg-prof2').value:null,
+    id_profession_3: document.getElementById('eg-prof3').value?+document.getElementById('eg-prof3').value:null,
   };
   await patch('groups', editingGroupId, data);
   const idx = DB.groups.findIndex(g=>g.id===editingGroupId);
@@ -4874,12 +4890,14 @@ function renderDictMenu() {
   });
   if (!groups['Накази']) groups['Накази'] = [];
   groups['Накази'].push({key:'order-templates', label:'🖨 Шаблони наказів', _special:true});
+  if (!groups['Вступна кампанія']) groups['Вступна кампанія'] = [];
+  groups['Вступна кампанія'].push({key:'admission-campaigns', label:'🎓 Конкурсні пропозиції', _special:true, _fn:'selectAdmissionCampaigns'});
   let html = '';
   Object.keys(groups).forEach(g => {
     html += `<div style="padding:8px 14px 4px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--muted)">${g}</div>`;
     groups[g].forEach(d => {
-      const active = d._special ? currentDict === 'order-templates' : (currentDict && currentDict.key === d.key);
-      const onclickFn = d._special ? 'selectOrderTemplates()' : `selectDict('${d.key}')`;
+      const active = d._special ? currentDict === d.key : (currentDict && currentDict.key === d.key);
+      const onclickFn = d._special ? (d._fn||'selectOrderTemplates')+'()' : `selectDict('${d.key}')`;
       html += `<div onclick="${onclickFn}"
         style="padding:9px 16px;font-size:13px;cursor:pointer;transition:all .15s;
         background:${active ? '#EEF2FF' : 'transparent'};
@@ -4910,6 +4928,85 @@ async function loadOrderTemplatesData(){
   orderTemplates = Array.isArray(tmpl)?tmpl:[];
   orgSettings = {};
   (Array.isArray(settings)?settings:[]).forEach(s=>{orgSettings[s.key]=s.value;});
+}
+
+// ══════════════════ ВСТУПНА КАМПАНІЯ (КОНКУРСНІ ПРОПОЗИЦІЇ) ══════════════════
+let admissionCampaigns = [];
+async function loadAdmissionCampaigns(){
+  const data = await api('admission_campaigns','?order=id');
+  admissionCampaigns = Array.isArray(data)?data:[];
+}
+async function selectAdmissionCampaigns(){
+  currentDict = 'admission-campaigns';
+  renderDictMenu();
+  document.getElementById('dict-title').textContent = '🎓 Вступна кампанія (Конкурсні пропозиції)';
+  document.getElementById('dict-add-btn').style.display = 'none';
+  const w = document.getElementById('dict-search-wrap');
+  if(w) w.remove();
+  document.getElementById('dict-content').innerHTML = '<div class="empty-state">Завантаження...</div>';
+  await loadAdmissionCampaigns();
+  renderAdmissionCampaignsUI();
+}
+function renderAdmissionCampaignsUI(){
+  const rows = DB.groups.map(g=>({g, c: admissionCampaigns.find(x=>x.id_groups===g.id)}))
+    .sort((a,b)=>(a.g.group_number||'').localeCompare(b.g.group_number||'',undefined,{numeric:true}));
+  document.getElementById('dict-content').innerHTML = `
+    <div style="padding:16px">
+      <div style="font-size:12px;color:var(--muted);margin-bottom:14px">Дані вступної кампанії для кожної групи — використовуються при друку наказу про зарахування (розділ "Додатки по групах").</div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px">
+        ${rows.map(({g,c})=>`<div class="card" style="padding:12px">
+          <div style="font-weight:700;font-size:13px">Група ${g.group_number}${g.name&&g.name!==g.group_number?' — '+g.name:''}</div>
+          ${c?`<div style="font-size:12px;color:var(--muted);margin-top:6px">
+            ID: ${c.competition_id||'—'}<br>
+            ${c.education_basis||'—'}<br>
+            ${c.study_period_start&&c.study_period_end?fmtDate(c.study_period_start)+' — '+fmtDate(c.study_period_end):'Період не вказано'}
+          </div>`:'<div style="font-size:12px;color:var(--muted);margin-top:6px">Дані ще не заповнені</div>'}
+          <button class="btn btn-sm" style="margin-top:10px" onclick="openAdmissionCampaignEditor(${g.id})">✏️ Редагувати</button>
+        </div>`).join('')}
+      </div>
+    </div>`;
+}
+let editingCampaignGroupId = null;
+function openAdmissionCampaignEditor(groupId){
+  const g = DB.groups.find(x=>x.id===groupId);
+  if(!g) return;
+  editingCampaignGroupId = groupId;
+  const c = admissionCampaigns.find(x=>x.id_groups===groupId) || {};
+  document.getElementById('ac-modal-title').textContent = `🎓 Конкурсна пропозиція — Група ${g.group_number}`;
+  document.getElementById('ac-competition-id').value = c.competition_id||'';
+  document.getElementById('ac-education-basis').value = c.education_basis||'Базова середня освіта';
+  document.getElementById('ac-qualification-level').value = c.qualification_level||'ОК спеціаліст';
+  document.getElementById('ac-study-form').value = c.study_form||'Денна';
+  document.getElementById('ac-period-start').value = c.study_period_start||'';
+  document.getElementById('ac-period-end').value = c.study_period_end||'';
+  document.getElementById('ac-duration-text').value = c.study_duration_text||'';
+  document.getElementById('modal-admission-campaign').classList.add('open');
+}
+async function saveAdmissionCampaign(){
+  if(!editingCampaignGroupId) return;
+  const data = {
+    id_groups: editingCampaignGroupId,
+    competition_id: document.getElementById('ac-competition-id').value.trim()||null,
+    education_basis: document.getElementById('ac-education-basis').value||null,
+    qualification_level: document.getElementById('ac-qualification-level').value.trim()||null,
+    study_form: document.getElementById('ac-study-form').value.trim()||null,
+    study_period_start: document.getElementById('ac-period-start').value||null,
+    study_period_end: document.getElementById('ac-period-end').value||null,
+    study_duration_text: document.getElementById('ac-duration-text').value.trim()||null,
+    editor_login: session.login,
+    edit_time: new Date().toISOString(),
+  };
+  const existing = admissionCampaigns.find(x=>x.id_groups===editingCampaignGroupId);
+  if(existing){
+    await patch('admission_campaigns', existing.id, data);
+    Object.assign(existing, data);
+  } else {
+    const res = await post('admission_campaigns', data);
+    const rec = Array.isArray(res)?res[0]:res;
+    if(rec) admissionCampaigns.push(rec);
+  }
+  closeModal('admission-campaign');
+  renderAdmissionCampaignsUI();
 }
 
 async function selectOrderTemplates(){
@@ -5146,20 +5243,22 @@ async function printOrderAsPdf(orderId){
       docs.sort((a,b)=>new Date(b.date_issue||0)-new Date(a.date_issue||0));
       return docs[0];
     };
+    const campaigns = await api('admission_campaigns', `?id_groups=in.(${groupsInOrder.map(g=>g.id).join(',')})`);
 
     let runningNum = 0;
     groupsInOrder.forEach((g,gi)=>{
+      const camp = (campaigns||[]).find(c=>c.id_groups===g.id) || {};
       const groupPersons = persons.filter(p=>p.id_groups===g.id);
       const appendixContent = [
         {text:'', pageBreak:'before'},
         {text:`Додаток №${gi+1} до наказу про зарахування на навчання`, alignment:'right', fontSize:10},
         {text:`від ${fmtDate(order.date)} №${order.number||''}`, alignment:'right', fontSize:10, margin:[0,0,0,10]},
-        {text:`Вступ на основі: ${g.education_basis||''}`, fontSize:10},
-        {text:`ID конкурсної пропозиції в ЄДЕБО: ${g.competition_id||''}`, fontSize:10},
-        {text:`Освітньо-кваліфікаційний рівень: ${g.qualification_level||''}`, fontSize:10},
-        {text:`Форма навчання: ${g.study_form||''}`, fontSize:10},
-        {text:`Період навчання: ${g.study_period_start&&g.study_period_end?'з '+fmtDate(g.study_period_start)+' по '+fmtDate(g.study_period_end):''}`, fontSize:10},
-        {text:`Строк навчання: ${g.study_duration_text||''}`, fontSize:10, margin:[0,0,0,8]},
+        {text:`Вступ на основі: ${camp.education_basis||''}`, fontSize:10},
+        {text:`ID конкурсної пропозиції в ЄДЕБО: ${camp.competition_id||''}`, fontSize:10},
+        {text:`Освітньо-кваліфікаційний рівень: ${camp.qualification_level||''}`, fontSize:10},
+        {text:`Форма навчання: ${camp.study_form||''}`, fontSize:10},
+        {text:`Період навчання: ${camp.study_period_start&&camp.study_period_end?'з '+fmtDate(camp.study_period_start)+' по '+fmtDate(camp.study_period_end):''}`, fontSize:10},
+        {text:`Строк навчання: ${camp.study_duration_text||''}`, fontSize:10, margin:[0,0,0,8]},
         {text:`Професії, що здобуваються: ${groupProfessionText(g)}`, fontSize:10, margin:[0,0,0,10]},
         {
           table:{
