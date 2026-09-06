@@ -4978,31 +4978,38 @@ async function selectAdmissionCampaigns(){
 function renderAdmissionCampaignsUI(){
   const sortedYears = [...DB.years].sort((a,b)=>new Date(b.date_start)-new Date(a.date_start));
   const yearCampaigns = admissionCampaigns.filter(c=>c.id_academic_year===campaignYearFilter);
-  const rows = DB.groups.map(g=>({g, c: yearCampaigns.find(x=>x.id_groups===g.id)}))
+  const rows = yearCampaigns.map(c=>({g: DB.groups.find(g=>g.id===c.id_groups), c})).filter(r=>r.g)
     .sort((a,b)=>(a.g.group_number||'').localeCompare(b.g.group_number||'',undefined,{numeric:true}));
+  const groupsWithoutCampaign = DB.groups.filter(g=>!yearCampaigns.some(c=>c.id_groups===g.id))
+    .sort((a,b)=>(a.group_number||'').localeCompare(b.group_number||'',undefined,{numeric:true}));
   document.getElementById('dict-content').innerHTML = `
     <div style="padding:16px">
-      <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;flex-wrap:wrap">
         <label style="font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase">Навчальний рік:</label>
         <select onchange="campaignYearFilter=+this.value;renderAdmissionCampaignsUI()" style="padding:7px 11px;font-size:13px;border:1px solid var(--border);border-radius:8px;font-family:var(--font);outline:none">
           ${sortedYears.map(y=>`<option value="${y.id}" ${campaignYearFilter===y.id?'selected':''}>${yearLabelFull(y)}${y.active?' (поточний)':''}</option>`).join('')}
         </select>
+        <select id="ac-new-group-picker" style="padding:7px 11px;font-size:13px;border:1px solid var(--border);border-radius:8px;font-family:var(--font);outline:none;margin-left:auto">
+          <option value="">— Оберіть групу —</option>
+          ${groupsWithoutCampaign.map(g=>`<option value="${g.id}">Група ${g.group_number}</option>`).join('')}
+        </select>
+        <button class="btn btn-sm btn-primary" onclick="const v=document.getElementById('ac-new-group-picker').value; if(v)openAdmissionCampaignEditor(+v); else alert('Оберіть групу зі списку')">+ Додати пропозицію</button>
       </div>
-      <div style="font-size:12px;color:var(--muted);margin-bottom:14px">Дані вступної кампанії для кожної групи за обраний рік — використовуються при друку наказу про зарахування (розділ "Додатки по групах").</div>
+      <div style="font-size:12px;color:var(--muted);margin-bottom:14px">Показані лише групи, для яких вже створено конкурсну пропозицію за обраний рік. Щоб додати нову — оберіть групу вище.</div>
       <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px">
-        ${rows.map(({g,c})=>`<div class="card" style="padding:12px">
+        ${rows.length?rows.map(({g,c})=>`<div class="card" style="padding:12px">
           <div style="font-weight:700;font-size:13px">Група ${g.group_number}${g.name&&g.name!==g.group_number?' — '+g.name:''}</div>
-          ${c?`<div style="font-size:12px;color:var(--muted);margin-top:6px">
+          <div style="font-size:12px;color:var(--muted);margin-top:6px">
             ID: ${c.competition_id||'—'}<br>
             ${c.education_basis||'—'}<br>
             ${c.study_period_start&&c.study_period_end?fmtDate(c.study_period_start)+' — '+fmtDate(c.study_period_end):'Період не вказано'}
-          </div>`:'<div style="font-size:12px;color:var(--muted);margin-top:6px">Дані ще не заповнені</div>'}
-          <div style="display:flex;gap:6px;margin-top:10px;flex-wrap:wrap">
-            <button class="btn btn-sm" onclick="openAdmissionCampaignEditor(${g.id})">✏️ ${c?'Редагувати':'Додати'}</button>
-            ${c?`<button class="btn btn-sm" onclick="openCopyCampaignModal(${c.id})">📋 Копіювати в рік</button>
-            <button class="btn btn-sm btn-danger" onclick="deleteAdmissionCampaign(${c.id})">🗑</button>`:''}
           </div>
-        </div>`).join('')}
+          <div style="display:flex;gap:6px;margin-top:10px;flex-wrap:wrap">
+            <button class="btn btn-sm" onclick="openAdmissionCampaignEditor(${g.id})">✏️ Редагувати</button>
+            <button class="btn btn-sm" onclick="openCopyCampaignModal(${c.id})">📋 Копіювати в рік</button>
+            <button class="btn btn-sm btn-danger" onclick="deleteAdmissionCampaign(${c.id})">🗑</button>
+          </div>
+        </div>`).join(''):'<div class="empty-state" style="grid-column:1/-1">За цей рік конкурсних пропозицій ще немає — додайте першу вище</div>'}
       </div>
     </div>`;
 }
