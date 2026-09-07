@@ -1959,6 +1959,16 @@ th.sortable:hover{background:var(--bg)}
         </select>
       </div>
     </div>
+    <div id="ord-enrollment-block" style="display:none">
+      <div class="form-grid" style="margin-bottom:16px">
+        <div class="form-group"><label>Дата, з якої зарахувати</label><input type="date" id="ord-enrollment-date"></div>
+        <div class="form-group">
+          <label>Відповідальний за поіменну книгу</label>
+          <input type="text" id="ord-responsible-book" list="order-responsible-datalist" placeholder="Оберіть користувача">
+          <datalist id="order-responsible-datalist"></datalist>
+        </div>
+      </div>
+    </div>
     <div style="border-top:1px solid var(--border);padding-top:16px">
       <!-- Інфо-блок для переведення -->
       <div id="transfer-group-block" style="display:none;align-items:center;gap:10px;padding:10px 14px;background:#EEF2FF;border-radius:8px;margin-bottom:12px;border:1px solid #C7D2FE">
@@ -2484,7 +2494,7 @@ async function loadControlsData(){
     api('control_files','?order=id'),
     api('control_completions','?order=id'),
     api('control_completion_files','?order=id'),
-    DB.users.length?Promise.resolve(DB.users):api('dic_users','?select=login,initials'),
+    DB.users.length?Promise.resolve(DB.users):api('dic_users','?select=login,initials,fullname_dative,position,position_dative'),
     api('dic_control_source','?order=name'),
   ]);
   DB.controls=Array.isArray(controls)?controls:[];
@@ -4202,6 +4212,8 @@ function openAddOrder(){
   document.getElementById('ord-date').value=new Date().toISOString().split('T')[0];
   document.getElementById('ord-type').value='1';
   document.getElementById('ord-state').value='1';
+  document.getElementById('ord-enrollment-date').value='';
+  document.getElementById('ord-responsible-book').value='';
   document.getElementById('order-modal-title').textContent='📄 Новий наказ';
   document.getElementById('order-modal-sub').textContent='';
   document.getElementById('ord-activation-info').textContent='';
@@ -4220,6 +4232,8 @@ async function openOrderModal(id){
   document.getElementById('ord-date').value=o.date||'';
   document.getElementById('ord-type').value=o.order_type||1;
   document.getElementById('ord-state').value=o.state||1;
+  document.getElementById('ord-enrollment-date').value=o.enrollment_date||'';
+  document.getElementById('ord-responsible-book').value=o.id_responsible_book||'';
   document.getElementById('order-modal-title').textContent=`📄 Наказ № ${o.number||'—'}`;
   document.getElementById('order-modal-sub').textContent=`${ORDER_TYPES[o.order_type||1]} · ${fmt(o.date)}`;
   onOrderTypeChange();
@@ -4234,6 +4248,21 @@ function onOrderTypeChange(){
   // Для переведення показуємо блок вибору нової групи
   const transferBlock=document.getElementById('transfer-group-block');
   if(transferBlock) transferBlock.style.display=type===4?'flex':'none';
+  const enrollBlock=document.getElementById('ord-enrollment-block');
+  if(enrollBlock){
+    enrollBlock.style.display=type===1?'block':'none';
+    if(type===1) populateOrderResponsibleDatalist();
+  }
+}
+async function populateOrderResponsibleDatalist(){
+  const dl=document.getElementById('order-responsible-datalist');
+  if(!dl||dl.dataset.loaded)return;
+  if(!DB.users||!DB.users.length){DB.users=await api('dic_users','?select=login,initials,fullname_dative,position,position_dative');}
+  const opts=[];
+  DB.users.forEach(u=>opts.push(`<option value="${u.login}">${(u.initials||u.login).replace(/"/g,'&quot;')}</option>`));
+  DB.teachers.forEach(t=>{if(t.login)opts.push(`<option value="${t.login}">${fullName(t).replace(/"/g,'&quot;')}</option>`);});
+  dl.innerHTML=opts.join('');
+  dl.dataset.loaded='1';
 }
 
 function renderOrderPersonsList(){
@@ -4462,7 +4491,10 @@ async function saveOrder(){
   if(!num)return alert('Введіть номер наказу');
   const orderType=parseInt(document.getElementById('ord-type').value);
   const orderState=parseInt(document.getElementById('ord-state').value);
-  const orderData={number:num,date:document.getElementById('ord-date').value||null,order_type:orderType,state:orderState};
+  const orderData={number:num,date:document.getElementById('ord-date').value||null,order_type:orderType,state:orderState,
+    enrollment_date: orderType===1?(document.getElementById('ord-enrollment-date').value||null):null,
+    id_responsible_book: orderType===1?(document.getElementById('ord-responsible-book').value.trim()||null):null,
+  };
 
   if(orderType===4 && orderPersons.length && orderPersons.some(p=>!p.id_groups_new)){
     return alert('Оберіть нову групу для кожної групи, доданої до наказу');
@@ -5190,6 +5222,9 @@ const TEMPLATE_PLACEHOLDERS = [
   {tag:'{{директор_посада_давальний}}', label:'Посада директора (давальний)'},
   {tag:'{{група}}', label:'Номер групи (якщо одна на наказ)'},
   {tag:'{{професія}}', label:'Професія групи (якщо одна на наказ)'},
+  {tag:'{{дата_зарахування}}', label:'Дата, з якої зарахувати'},
+  {tag:'{{відповідальний_поіменна}}', label:'ПІБ відповідального за поіменну книгу (давальний)'},
+  {tag:'{{відповідальний_поіменна_посада}}', label:'Посада відповідального за поіменну книгу (давальний)'},
 ];
 
 function openTemplateEditor(id, orderTypeForNew){
@@ -5283,6 +5318,18 @@ async function printOrderAsPdf(orderId){
   const groupProfessionText = g => [g.id_profession_1,g.id_profession_2,g.id_profession_3]
     .filter(Boolean).map(pid=>profsCurrent.find(p=>p.id===pid)?.name).filter(Boolean).join(', ');
 
+  let responsibleDative = '', responsiblePositionDative = '';
+  if(order.id_responsible_book){
+    if(!DB.users||!DB.users.length){DB.users=await api('dic_users','?select=login,initials,fullname_dative,position,position_dative');}
+    const u = DB.users.find(x=>x.login===order.id_responsible_book);
+    const t = DB.teachers.find(x=>x.login===order.id_responsible_book);
+    const person = u || t;
+    if(person){
+      responsibleDative = person.fullname_dative || '';
+      responsiblePositionDative = person.position_dative || '';
+    }
+  }
+
   const replacements = {
     '{{номер}}': order.number || '',
     '{{дата}}': fmtDate(order.date) || '',
@@ -5294,6 +5341,9 @@ async function printOrderAsPdf(orderId){
     '{{директор_посада_давальний}}': orgSettings.director_position_dative || '',
     '{{група}}': singleGroup ? singleGroup.group_number : '',
     '{{професія}}': singleGroup ? groupProfessionText(singleGroup) : '',
+    '{{дата_зарахування}}': fmtDate(order.enrollment_date) || '',
+    '{{відповідальний_поіменна}}': responsibleDative,
+    '{{відповідальний_поіменна_посада}}': responsiblePositionDative,
   };
 
   let html = template.html_content || '';
