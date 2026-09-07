@@ -1621,7 +1621,10 @@ th.sortable:hover{background:var(--bg)}
     <div class="page" id="p-orders">
       <div class="page-header">
         <div class="page-title">📄 Накази</div>
-        <button class="btn btn-primary" onclick="openAddOrder()">+ Новий наказ</button>
+        <div style="display:flex;gap:8px;align-items:center">
+          <span id="orders-attention-badge" style="display:none;font-size:12px;font-weight:600;color:#92400E;background:#FFFBEB;padding:5px 10px;border-radius:8px">⚠ 0 потребують вашої уваги</span>
+          <button class="btn btn-primary" onclick="openAddOrder()">+ Новий наказ</button>
+        </div>
       </div>
       <div style="background:var(--white);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden">
         <div class="page-tabs">
@@ -2939,7 +2942,7 @@ function renderPage(p){
   else if(p==='groups')renderGroups();
   else if(p==='subjects')renderSubjects();
   else if(p==='teachers')renderTeachers();
-  else if(p==='orders')renderOrders();
+  else if(p==='orders'){renderOrders();loadOrderNotifications().then(renderOrders);}
   else if(p==='controls')renderControls();
   else if(p==='users'){loadUsers();}
   else if(p==='reports'){document.getElementById('report-output').innerHTML='';}
@@ -4166,12 +4169,55 @@ async function delIndividual(id){
 }
 
 // ── НАКАЗИ ──
+let orderNotifications = [];
+let orderNotificationsLoaded = false;
+async function loadOrderNotifications(){
+  if(orderNotificationsLoaded)return;
+  const data = await api('order_notifications','?order=id');
+  orderNotifications = Array.isArray(data)?data:[];
+  orderNotificationsLoaded = true;
+}
+async function notifyOrderResponsibles(orderId){
+  try{
+    const r = await fetch(`${SB}/functions/v1/send-order-notification`,{
+      method:'POST',
+      headers:{'apikey':KEY,'Authorization':'Bearer '+KEY,'Content-Type':'application/json'},
+      body: JSON.stringify({order_id: orderId})
+    });
+    const body = await r.json().catch(()=>({}));
+    if(!r.ok){console.warn('Не вдалося сповістити відповідальних:', body);}
+    orderNotificationsLoaded = false;
+    await loadOrderNotifications();
+    renderOrders();
+  }catch(e){
+    console.warn('Помилка відправки сповіщення про наказ:', e);
+  }
+}
+async function markOrderNotificationDone(orderId){
+  const mine = orderNotifications.filter(n=>n.order_id===orderId && n.recipient_login===session.login && !n.done_at);
+  for(const n of mine){
+    await patch('order_notifications', n.id, {done_at:new Date().toISOString(), done_by_login:session.login});
+    n.done_at = new Date().toISOString();
+    n.done_by_login = session.login;
+  }
+  renderOrders();
+}
 function renderOrders(){
   const all=DB.orders;
   document.getElementById('ocnt-all').textContent=all.length;
   document.getElementById('ocnt-draft').textContent=all.filter(o=>o.state===1||o.state==='1').length;
   document.getElementById('ocnt-active').textContent=all.filter(o=>o.state===2||o.state==='2').length;
   document.getElementById('ocnt-cancelled').textContent=all.filter(o=>o.state===3||o.state==='3').length;
+
+  const attentionCount = all.filter(o=>(o.state===2||o.state==='2') &&
+    orderNotifications.some(n=>n.order_id===o.id && n.recipient_login===session.login && !n.done_at)
+  ).length;
+  const attBadge = document.getElementById('orders-attention-badge');
+  if(attBadge){
+    if(attentionCount){attBadge.style.display='inline-block';attBadge.textContent=`⚠ ${attentionCount} потребують вашої уваги`;}
+    else attBadge.style.display='none';
+  }
+
   const render=(list,elId)=>{
     const el=document.getElementById(elId);
     if(!list.length){el.innerHTML='<div class="empty-state">Наказів немає</div>';return;}
@@ -4180,7 +4226,9 @@ function renderOrders(){
       const g=DB.groups.find(gr=>gr.id==o.id_groups);
       const st=ORDER_STATES[o.state]||ORDER_STATES[1];
       const tp=ORDER_TYPES[o.order_type||1]||'—';
-      return`<div class="order-card" onclick="openOrderModal(${o.id})">
+      const myPending = orderNotifications.find(n=>n.order_id===o.id && n.recipient_login===session.login && !n.done_at);
+      const myDone = orderNotifications.find(n=>n.order_id===o.id && n.recipient_login===session.login && n.done_at);
+      return`<div class="order-card" onclick="openOrderModal(${o.id})" style="${myPending?'border:1.5px solid #D97706;background:#FFFBEB':''}">
         <div class="order-card-header">
           <span class="order-card-num">№ ${o.number||'—'}</span>
           <div style="display:flex;gap:6px;align-items:center">
@@ -4193,8 +4241,11 @@ function renderOrders(){
           ${g?`<span>🏫 Гр. ${g.group_number}</span>`:''}
         </div>
         <div class="order-card-persons">👤 Осіб у наказі: <strong>${persons.length}</strong></div>
-        <div style="margin-top:8px" onclick="event.stopPropagation()">
+        ${myPending?`<div style="font-size:11px;color:#92400E;font-weight:600;margin-top:6px">⚠ Потребує вашого опрацювання</div>`:''}
+        ${myDone?`<div style="font-size:11px;color:#16A34A;font-weight:600;margin-top:6px">✅ Опрацьовано вами</div>`:''}
+        <div style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap" onclick="event.stopPropagation()">
           <button class="btn btn-sm" onclick="printOrderAsPdf(${o.id})">🖨 Друк PDF</button>
+          ${myPending?`<button class="btn btn-sm btn-primary" onclick="markOrderNotificationDone(${o.id})">✅ Позначити виконаним</button>`:''}
         </div>
       </div>`;
     }).join('');
@@ -4521,9 +4572,10 @@ async function saveOrder(){
     await post('order_individuals',{order_id:orderId,individual_id:p.individual_id,id_groups:p.id_groups||null,id_groups_new:orderType===4?(p.id_groups_new||null):null});
   }
 
-  // Якщо наказ АКТИВНИЙ (і раніше не був активним) — зараховуємо
+  // Якщо наказ АКТИВНИЙ (і раніше не був активним) — зараховуємо + сповіщаємо відповідальних
   if(orderState===2 && prevState!==2){
     await activateOrder(orderId,orderType,orderPersons);
+    notifyOrderResponsibles(orderId);
   }
 
   // Якщо статус змінився з АКТИВНОГО на будь-який інший (чорновик або відмінений) — відкат
