@@ -4936,6 +4936,7 @@ function renderDictMenu() {
   });
   if (!groups['Накази']) groups['Накази'] = [];
   groups['Накази'].push({key:'order-templates', label:'🖨 Шаблони наказів', _special:true});
+  groups['Накази'].push({key:'edbo-responsible', label:'👤 Відповідальний за ЄДЕБО', _special:true, _fn:'selectEdboResponsible'});
   if (!groups['Вступна кампанія']) groups['Вступна кампанія'] = [];
   groups['Вступна кампанія'].push({key:'admission-campaigns', label:'🎓 Конкурсні пропозиції', _special:true, _fn:'selectAdmissionCampaigns'});
   let html = '';
@@ -5140,6 +5141,48 @@ async function confirmCopyCampaign(){
   renderAdmissionCampaignsUI();
 }
 
+// ══════════════════ ВІДПОВІДАЛЬНИЙ ЗА ЄДЕБО ══════════════════
+async function selectEdboResponsible(){
+  currentDict = 'edbo-responsible';
+  renderDictMenu();
+  document.getElementById('dict-title').textContent = '👤 Відповідальний за ЄДЕБО';
+  document.getElementById('dict-add-btn').style.display = 'none';
+  const w = document.getElementById('dict-search-wrap');
+  if(w) w.remove();
+  document.getElementById('dict-content').innerHTML = '<div class="empty-state">Завантаження...</div>';
+  const settings = await api('org_settings','');
+  orgSettings = {};
+  (Array.isArray(settings)?settings:[]).forEach(s=>{orgSettings[s.key]=s.value;});
+  if(!DB.users||!DB.users.length){DB.users=await api('dic_users','?select=login,initials,fullname_dative,position,position_dative');}
+  renderEdboResponsibleUI();
+}
+function renderEdboResponsibleUI(){
+  const current = DB.users.find(u=>u.login===orgSettings.edbo_responsible_login);
+  document.getElementById('dict-content').innerHTML = `
+    <div style="padding:16px;max-width:480px">
+      <div style="font-size:12px;color:var(--muted);margin-bottom:14px">Ця людина використовується в наказах — її ПІБ та посада (у давальному відмінку) підставляються замість плейсхолдерів {{відповідальний_єдебо}} / {{відповідальний_єдебо_посада}}.</div>
+      <div class="form-group" style="margin-bottom:12px">
+        <label>Відповідальний за ЄДЕБО</label>
+        <input type="text" id="edbo-resp-input" list="edbo-resp-datalist" value="${current?current.login:''}" placeholder="Оберіть користувача">
+        <datalist id="edbo-resp-datalist">${DB.users.map(u=>`<option value="${u.login}">${(u.initials||u.login).replace(/"/g,'&quot;')}</option>`).join('')}</datalist>
+      </div>
+      ${current?`<div style="font-size:12px;color:var(--muted);margin-bottom:12px">
+        ПІБ (давальний): ${current.fullname_dative||'<span style="color:#DC2626">не заповнено в профілі</span>'}<br>
+        Посада (давальна): ${current.position_dative||'<span style="color:#DC2626">не заповнено в профілі</span>'}
+      </div>`:''}
+      <button class="btn btn-primary btn-sm" onclick="saveEdboResponsible()">💾 Зберегти</button>
+    </div>`;
+}
+async function saveEdboResponsible(){
+  const login = document.getElementById('edbo-resp-input').value.trim();
+  const user = DB.users.find(u=>u.login===login);
+  if(login && !user){alert('Такого користувача немає в довіднику. Оберіть зі списку підказок.');return;}
+  await fetch(`${SB}/rest/v1/org_settings?key=eq.edbo_responsible_login`, {method:'PATCH', headers:H, body: JSON.stringify({value: login||null})});
+  orgSettings.edbo_responsible_login = login||'';
+  alert('✅ Збережено');
+  renderEdboResponsibleUI();
+}
+
 async function selectOrderTemplates(){
   currentDict = 'order-templates';
   renderDictMenu();
@@ -5225,6 +5268,8 @@ const TEMPLATE_PLACEHOLDERS = [
   {tag:'{{дата_зарахування}}', label:'Дата, з якої зарахувати'},
   {tag:'{{відповідальний_поіменна}}', label:'ПІБ відповідального за поіменну книгу (давальний)'},
   {tag:'{{відповідальний_поіменна_посада}}', label:'Посада відповідального за поіменну книгу (давальний)'},
+  {tag:'{{відповідальний_єдебо}}', label:'ПІБ відповідального за ЄДЕБО (давальний)'},
+  {tag:'{{відповідальний_єдебо_посада}}', label:'Посада відповідального за ЄДЕБО (давальний)'},
 ];
 
 function openTemplateEditor(id, orderTypeForNew){
@@ -5330,6 +5375,16 @@ async function printOrderAsPdf(orderId){
     }
   }
 
+  let edboRespDative = '', edboRespPositionDative = '';
+  if(orgSettings.edbo_responsible_login){
+    if(!DB.users||!DB.users.length){DB.users=await api('dic_users','?select=login,initials,fullname_dative,position,position_dative');}
+    const eu = DB.users.find(x=>x.login===orgSettings.edbo_responsible_login);
+    if(eu){
+      edboRespDative = eu.fullname_dative || '';
+      edboRespPositionDative = eu.position_dative || '';
+    }
+  }
+
   const replacements = {
     '{{номер}}': order.number || '',
     '{{дата}}': fmtDate(order.date) || '',
@@ -5344,6 +5399,8 @@ async function printOrderAsPdf(orderId){
     '{{дата_зарахування}}': fmtDate(order.enrollment_date) || '',
     '{{відповідальний_поіменна}}': responsibleDative,
     '{{відповідальний_поіменна_посада}}': responsiblePositionDative,
+    '{{відповідальний_єдебо}}': edboRespDative,
+    '{{відповідальний_єдебо_посада}}': edboRespPositionDative,
   };
 
   let html = template.html_content || '';
