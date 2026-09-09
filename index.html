@@ -1947,12 +1947,7 @@ th.sortable:hover{background:var(--bg)}
       <div class="form-group"><label>Номер наказу *</label><input type="text" id="ord-number" placeholder="01-З"></div>
       <div class="form-group"><label>Дата наказу</label><input type="date" id="ord-date"></div>
       <div class="form-group"><label>Тип наказу</label>
-        <select id="ord-type" onchange="onOrderTypeChange()">
-          <option value="1">📥 Зарахування</option>
-          <option value="2">📤 Відрахування</option>
-          <option value="3">🏆 Випуск (закінчення навчання)</option>
-          <option value="4">🔄 Переведення на інший курс</option>
-        </select>
+        <select id="ord-type" onchange="onOrderTypeChange()"></select>
       </div>
       <div class="form-group"><label>Статус</label>
         <select id="ord-state">
@@ -1970,6 +1965,14 @@ th.sortable:hover{background:var(--bg)}
           <input type="text" id="ord-responsible-book" list="order-responsible-datalist" placeholder="Оберіть користувача">
           <datalist id="order-responsible-datalist"></datalist>
         </div>
+      </div>
+    </div>
+    <div class="form-group" style="margin-bottom:16px">
+      <label>Ознайомлення з наказом</label>
+      <div id="ord-acquaintances-list" style="margin-bottom:8px"></div>
+      <div style="display:flex;gap:8px">
+        <input type="text" id="ord-acquaintance-input" list="order-responsible-datalist" placeholder="Оберіть працівника" style="flex:1">
+        <button class="btn btn-sm" onclick="addOrderAcquaintance()">+ Додати</button>
       </div>
     </div>
     <div style="border-top:1px solid var(--border);padding-top:16px">
@@ -2160,12 +2163,7 @@ th.sortable:hover{background:var(--bg)}
     <div class="form-grid" style="margin-bottom:12px">
       <div class="form-group"><label>Назва шаблону</label><input type="text" id="tmpl-name" placeholder="Напр. Зарахування — стандартний"></div>
       <div class="form-group"><label>Тип наказу</label>
-        <select id="tmpl-order-type">
-          <option value="1">📥 Зарахування</option>
-          <option value="2">📤 Відрахування</option>
-          <option value="3">🏆 Випуск</option>
-          <option value="4">🔄 Переведення</option>
-        </select>
+        <select id="tmpl-order-type"></select>
       </div>
     </div>
     <div style="margin-bottom:8px">
@@ -2213,7 +2211,7 @@ th.sortable:hover{background:var(--bg)}
     <button class="modal-close" onclick="closeModal('user')">✕</button>
   </div>
   <div class="modal-body" style="display:flex;flex-direction:column;gap:12px">
-    <div class="form-group"><label>ПІБ (ініціали) *</label><input type="text" id="u-initials" placeholder="Іваненко І. І."></div>
+    <div class="form-group"><label>ПІБ (повністю) *</label><input type="text" id="u-initials" placeholder="Іваненко Іван Іванович"></div>
     <div class="form-group"><label>Логін *</label><input type="text" id="u-login" placeholder="ivan"></div>
     <div class="form-group"><label>Email <span style="color:var(--muted);font-weight:400">(для сповіщень по контролям)</span></label><input type="email" id="u-email" placeholder="ivan@example.com"></div>
     <div class="form-group"><label>ПІБ у давальному відмінку <span style="color:var(--muted);font-weight:400">(для наказів, напр. "Іваненку Івану Івановичу")</span></label><input type="text" id="u-fullname-dative" placeholder="Іваненку Івану Івановичу"></div>
@@ -2312,11 +2310,20 @@ const KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6
 const H={'apikey':KEY,'Authorization':'Bearer '+KEY,'Content-Type':'application/json'};
 const ROLES={admin:'Адміністратор',teacher:'Викладач',secretary:'Секретар',user:'Користувач'};
 const RBADGE={admin:'b-purple',teacher:'b-green',secretary:'b-amber',user:'b-gray'};
-const ORDER_TYPES={1:'📥 Зарахування',2:'📤 Відрахування',3:'🏆 Випуск',4:'🔄 Переведення'};
+function getOrderTypeLabel(orderTypeId){
+  const t=DB.orderTypes.find(x=>x.id===orderTypeId||x.id==orderTypeId);
+  return t?t.order_type:'—';
+}
+function getOrderBehavior(orderTypeId){
+  const t=DB.orderTypes.find(x=>x.id===orderTypeId||x.id==orderTypeId);
+  if(!t||!t.id_behavior)return null;
+  const b=DB.orderBehaviors.find(x=>x.id===t.id_behavior);
+  return b?b.code:null; // 'enroll' | 'expel' | 'graduate' | 'transfer' | null
+}
 const ORDER_STATES={1:{lbl:'Чорновик',cls:'b-gray'},2:{lbl:'Активний',cls:'b-green'},3:{lbl:'Відмінений',cls:'b-red'}};
 
 let session=null;
-let DB={individuals:[],groups:[],subjects:[],teachers:[],years:[],subjectTypes:[],pupils:[],orders:[],orderIndividuals:[],nationalities:[],cities:[],docTypes:[],relTypes:[],groupTypes:[],issuedBy:[],sexes:[],indDocFlags:{},controls:[],controlFiles:[],controlCompletions:[],controlCompletionFiles:[],users:[],controlSources:[],controlsLoaded:false};
+let DB={individuals:[],groups:[],subjects:[],teachers:[],years:[],subjectTypes:[],pupils:[],orders:[],orderIndividuals:[],nationalities:[],cities:[],docTypes:[],relTypes:[],groupTypes:[],issuedBy:[],sexes:[],indDocFlags:{},controls:[],controlFiles:[],controlCompletions:[],controlCompletionFiles:[],users:[],controlSources:[],controlsLoaded:false,orderTypes:[],orderBehaviors:[]};
 let grades={};
 let gradeTarget=null;
 let currentIndId=null;
@@ -2384,11 +2391,11 @@ async function startApp(){
 }
 
 async function loadAll(){
-  const [individuals,groups,subjects,teachers,years,subjectTypes,pupils,orders,orderInds,nationalities,cities,docTypes,relTypes,groupTypes,regions,districts,tcs,issuedBy,allDocuments]=await Promise.all([
+  const [individuals,groups,subjects,teachers,years,subjectTypes,pupils,orders,orderInds,nationalities,cities,docTypes,relTypes,groupTypes,regions,districts,tcs,issuedBy,allDocuments,orderTypesData,orderBehaviorsData]=await Promise.all([
     api('individual','?select=id,surname,name,middle_name,date_birth,rnokpp,phone_number,id_group_planning,unzr,is_edbo,edbo_application_number,editor_login,edit_time,create_time&order=surname'),
     api('groups','?order=id'),
     api('subjects','?order=subjects_title'),
-    api('teachers','?select=id,surname,name,middle_name,date_birth,login&order=surname'),
+    api('teachers','?select=id,surname,name,middle_name,date_birth,login,email,fullname_dative,position,position_dative&order=surname'),
     api('dic_academic_year','?order=id'),
     api('subjects_type','?order=sorts'),
     api('pupils','?select=id,id_individual,id_groups,id_order&order=id'),
@@ -2404,8 +2411,12 @@ async function loadAll(){
     api('dic_territorial_community','?order=id'),
     api('dic_issued_by','?order=id'),
     api('documents','?select=individual_id,doc_type_id,iscanceled&order=individual_id'),
+    api('dic_order_type','?order=id'),
+    api('dic_order_behavior','?order=id'),
   ]);
   DB.individuals=Array.isArray(individuals)?individuals:[];
+  DB.orderTypes=Array.isArray(orderTypesData)?orderTypesData:[];
+  DB.orderBehaviors=Array.isArray(orderBehaviorsData)?orderBehaviorsData:[];
   DB.groups=Array.isArray(groups)?groups:[];
   DB.subjects=Array.isArray(subjects)?subjects:[];
   DB.teachers=Array.isArray(teachers)?teachers:[];
@@ -3006,11 +3017,11 @@ function getStudentStatus(individualId){
   });
 
   // Випуск
-  if(myActiveOrders.some(o=>o.order_type===3||o.order_type==='3'))return 'graduated';
+  if(myActiveOrders.some(o=>getOrderBehavior(o.order_type)==='graduate'))return 'graduated';
   // Відрахування
-  if(myActiveOrders.some(o=>o.order_type===2||o.order_type==='2'))return 'expelled';
+  if(myActiveOrders.some(o=>getOrderBehavior(o.order_type)==='expel'))return 'expelled';
   // Зарахування
-  if(myActiveOrders.some(o=>o.order_type===1||o.order_type==='1'))return 'studying';
+  if(myActiveOrders.some(o=>getOrderBehavior(o.order_type)==='enroll'))return 'studying';
   // В pupils але без активного наказу зарахування — планує
   return 'planning';
 }
@@ -3062,6 +3073,23 @@ function fmtDate(d){
   const dt=new Date(d);
   if(isNaN(dt))return '';
   return String(dt.getDate()).padStart(2,'0')+'.'+String(dt.getMonth()+1).padStart(2,'0')+'.'+dt.getFullYear();
+}
+// ── Перетворення ПІБ для наказів ──
+// Вхід очікується у форматі "Прізвище Ім'я По батькові"
+function splitFullName(str){
+  const p=(str||'').trim().split(/\s+/).filter(Boolean);
+  return {surname:p[0]||'', name:p[1]||'', middleName:p[2]||''};
+}
+// "Прізвище Ім'я" -> "Ім'я ПРІЗВИЩЕ"
+function nameSurnameUpper(surname,name){
+  if(!surname||!name)return '';
+  return `${name} ${surname.toUpperCase()}`;
+}
+// "Прізвище Ім'я По батькові" -> "Прізвище І. П."
+function surnameInitials(surname,name,middleName){
+  if(!surname)return '';
+  const inits=[name,middleName].filter(Boolean).map(p=>p.charAt(0).toUpperCase()+'.').join(' ');
+  return inits?`${surname} ${inits}`:surname;
 }
 function buildGroupedPersonsTable(persons,docCell,bestDoc,profCurrentById){
   const byGroup={};
@@ -4225,7 +4253,7 @@ function renderOrders(){
       const persons=DB.orderIndividuals.filter(oi=>oi.order_id==o.id);
       const g=DB.groups.find(gr=>gr.id==o.id_groups);
       const st=ORDER_STATES[o.state]||ORDER_STATES[1];
-      const tp=ORDER_TYPES[o.order_type||1]||'—';
+      const tp=getOrderTypeLabel(o.order_type||1);
       const myPending = orderNotifications.find(n=>n.order_id===o.id && n.recipient_login===session.login && !n.done_at);
       const myDone = orderNotifications.find(n=>n.order_id===o.id && n.recipient_login===session.login && n.done_at);
       return`<div class="order-card" onclick="openOrderModal(${o.id})" style="${myPending?'border:1.5px solid #D97706;background:#FFFBEB':''}">
@@ -4256,12 +4284,17 @@ function renderOrders(){
   render(all.filter(o=>o.state===3||o.state==='3'),'orders-cancelled');
 }
 
+function populateOrderTypeSelect(){
+  const sel=document.getElementById('ord-type');
+  sel.innerHTML=DB.orderTypes.map(t=>`<option value="${t.id}">${t.order_type}</option>`).join('');
+}
 function openAddOrder(){
   currentOrderId=null;orderPersons=[];
   document.getElementById('ord-print-btn').style.display='none';
   document.getElementById('ord-number').value='';
   document.getElementById('ord-date').value=new Date().toISOString().split('T')[0];
-  document.getElementById('ord-type').value='1';
+  populateOrderTypeSelect();
+  document.getElementById('ord-type').value=DB.orderTypes[0]?.id||'';
   document.getElementById('ord-state').value='1';
   document.getElementById('ord-enrollment-date').value='';
   document.getElementById('ord-responsible-book').value='';
@@ -4270,6 +4303,9 @@ function openAddOrder(){
   document.getElementById('ord-activation-info').textContent='';
   onOrderTypeChange();
   renderOrderPersonsList();
+  orderAcquaintances=[];
+  renderOrderAcquaintances();
+  populateOrderResponsibleDatalist();
   openModal('order');
 }
 
@@ -4281,28 +4317,32 @@ async function openOrderModal(id){
   orderPersons=persons.map(oi=>({individual_id:oi.individual_id,id_groups:oi.id_groups||null,id_groups_new:oi.id_groups_new||null,id:oi.id}));
   document.getElementById('ord-number').value=o.number||'';
   document.getElementById('ord-date').value=o.date||'';
-  document.getElementById('ord-type').value=o.order_type||1;
+  populateOrderTypeSelect();
+  document.getElementById('ord-type').value=o.order_type||DB.orderTypes[0]?.id||'';
   document.getElementById('ord-state').value=o.state||1;
   document.getElementById('ord-enrollment-date').value=o.enrollment_date||'';
   document.getElementById('ord-responsible-book').value=o.id_responsible_book||'';
   document.getElementById('order-modal-title').textContent=`📄 Наказ № ${o.number||'—'}`;
-  document.getElementById('order-modal-sub').textContent=`${ORDER_TYPES[o.order_type||1]} · ${fmt(o.date)}`;
+  document.getElementById('order-modal-sub').textContent=`${getOrderTypeLabel(o.order_type||1)} · ${fmt(o.date)}`;
   onOrderTypeChange();
   renderOrderPersonsList();
+  await populateOrderResponsibleDatalist();
+  await loadOrderAcquaintances(id);
   openModal('order');
 }
 
 function onOrderTypeChange(){
   const type=parseInt(document.getElementById('ord-type').value);
-  const titles={1:'Особи для зарахування',2:'Особи для відрахування',3:'Особи для випуску',4:'Особи для переведення'};
-  document.getElementById('ord-persons-title').textContent=titles[type]||'Особи';
+  const behavior=getOrderBehavior(type);
+  const titles={enroll:'Особи для зарахування',expel:'Особи для відрахування',graduate:'Особи для випуску',transfer:'Особи для переведення'};
+  document.getElementById('ord-persons-title').textContent=titles[behavior]||'Особи';
   // Для переведення показуємо блок вибору нової групи
   const transferBlock=document.getElementById('transfer-group-block');
-  if(transferBlock) transferBlock.style.display=type===4?'flex':'none';
+  if(transferBlock) transferBlock.style.display=behavior==='transfer'?'flex':'none';
   const enrollBlock=document.getElementById('ord-enrollment-block');
   if(enrollBlock){
-    enrollBlock.style.display=type===1?'block':'none';
-    if(type===1) populateOrderResponsibleDatalist();
+    enrollBlock.style.display=behavior==='enroll'?'block':'none';
+    if(behavior==='enroll') populateOrderResponsibleDatalist();
   }
 }
 async function populateOrderResponsibleDatalist(){
@@ -4316,6 +4356,47 @@ async function populateOrderResponsibleDatalist(){
   dl.dataset.loaded='1';
 }
 
+// ── Ознайомлення з наказом (список працівників) ──
+let orderAcquaintances=[]; // масив логінів
+function personLabelByLogin(login){
+  const u=DB.users.find(x=>x.login===login);
+  if(u)return u.initials||u.login;
+  const t=DB.teachers.find(x=>x.login===login);
+  if(t)return fullName(t);
+  return login;
+}
+function renderOrderAcquaintances(){
+  const el=document.getElementById('ord-acquaintances-list');
+  if(!el)return;
+  el.innerHTML=orderAcquaintances.length?orderAcquaintances.map((login,i)=>`<span class="badge b-gray" style="display:inline-flex;align-items:center;gap:6px;margin:0 6px 6px 0;padding:5px 10px">
+    ${personLabelByLogin(login)}
+    <span style="cursor:pointer;font-weight:700" onclick="orderAcquaintances.splice(${i},1);renderOrderAcquaintances()">✕</span>
+  </span>`).join(''):'<div style="font-size:12px;color:var(--muted)">Ще нікого не додано</div>';
+}
+async function addOrderAcquaintance(){
+  await populateOrderResponsibleDatalist();
+  const input=document.getElementById('ord-acquaintance-input');
+  const login=input.value.trim();
+  if(!login)return;
+  const exists=DB.users.some(u=>u.login===login)||DB.teachers.some(t=>t.login===login);
+  if(!exists){alert('Такого користувача немає в довіднику. Оберіть зі списку підказок.');return;}
+  if(!orderAcquaintances.includes(login))orderAcquaintances.push(login);
+  input.value='';
+  renderOrderAcquaintances();
+}
+async function loadOrderAcquaintances(orderId){
+  if(!orderId){orderAcquaintances=[];renderOrderAcquaintances();return;}
+  const data=await api('order_acquaintances',`?order_id=eq.${orderId}&select=login`);
+  orderAcquaintances=Array.isArray(data)?data.map(x=>x.login):[];
+  renderOrderAcquaintances();
+}
+async function saveOrderAcquaintances(orderId){
+  await delWhere('order_acquaintances','order_id',orderId);
+  for(const login of orderAcquaintances){
+    await post('order_acquaintances',{order_id:orderId,login});
+  }
+}
+
 function renderOrderPersonsList(){
   const el=document.getElementById('ord-persons-list');
   if(!orderPersons.length){
@@ -4323,6 +4404,7 @@ function renderOrderPersonsList(){
     return;
   }
   const orderType=parseInt(document.getElementById('ord-type').value)||1;
+  const orderBehavior=getOrderBehavior(orderType);
 
   // Групуємо по id_groups
   const grouped={};
@@ -4359,13 +4441,13 @@ function renderOrderPersonsList(){
           <span class="badge b-gray" style="font-size:10px">${list.length} ос.</span>
         </div>
         <div style="display:flex;align-items:center;gap:6px" onclick="event.stopPropagation()">
-          ${orderType===1?`
+          ${orderBehavior==='enroll'?`
           <select style="padding:3px 7px;font-size:12px;border:1px solid var(--border);border-radius:6px;font-family:var(--font);outline:none;cursor:pointer;max-width:130px"
             onchange="changeGroupForPersons('${gid}',+this.value);this.value=''">
             <option value="">Змінити групу...</option>
             ${DB.groups.map(gr=>`<option value="${gr.id}">Гр. ${gr.group_number}</option>`).join('')}
           </select>`:''}
-          ${orderType===4?(()=>{
+          ${orderBehavior==='transfer'?(()=>{
             const curTarget=(list.find(p=>p.id_groups_new)||{}).id_groups_new||'';
             return `<select style="padding:3px 7px;font-size:12px;border:1px solid #C7D2FE;border-radius:6px;font-family:var(--font);outline:none;cursor:pointer;max-width:170px;background:#EEF2FF;color:#4F46E5;font-weight:600"
               onchange="setTransferTargetForGroup('${gid}',+this.value)">
@@ -4386,7 +4468,7 @@ function renderOrderPersonsList(){
               <div>
                 <div style="font-size:13px;font-weight:500">${fullName(ind)}</div>
                 <div style="font-size:11px;color:var(--muted)">${fmt(ind.date_birth)}${ind.rnokpp?` · ${ind.rnokpp}`:''}</div>
-                ${orderType===4&&p.id_groups_new?`<div style="font-size:11px;color:#4F46E5">→ ${(()=>{const ng=DB.groups.find(x=>x.id==p.id_groups_new);return ng?`Група ${ng.group_number} (${ng.curriculum} курс)`:'нова група'})()}</div>`:''}
+                ${orderBehavior==='transfer'&&p.id_groups_new?`<div style="font-size:11px;color:#4F46E5">→ ${(()=>{const ng=DB.groups.find(x=>x.id==p.id_groups_new);return ng?`Група ${ng.group_number} (${ng.curriculum} курс)`:'нова група'})()}</div>`:''}
               </div>
             </div>
             <button class="btn btn-sm btn-danger" onclick="orderPersons.splice(${p._idx},1);renderOrderPersonsList()">✕</button>
@@ -4541,13 +4623,14 @@ async function saveOrder(){
   const num=document.getElementById('ord-number').value.trim();
   if(!num)return alert('Введіть номер наказу');
   const orderType=parseInt(document.getElementById('ord-type').value);
+  const orderBehavior=getOrderBehavior(orderType);
   const orderState=parseInt(document.getElementById('ord-state').value);
   const orderData={number:num,date:document.getElementById('ord-date').value||null,order_type:orderType,state:orderState,
-    enrollment_date: orderType===1?(document.getElementById('ord-enrollment-date').value||null):null,
-    id_responsible_book: orderType===1?(document.getElementById('ord-responsible-book').value.trim()||null):null,
+    enrollment_date: orderBehavior==='enroll'?(document.getElementById('ord-enrollment-date').value||null):null,
+    id_responsible_book: orderBehavior==='enroll'?(document.getElementById('ord-responsible-book').value.trim()||null):null,
   };
 
-  if(orderType===4 && orderPersons.length && orderPersons.some(p=>!p.id_groups_new)){
+  if(orderBehavior==='transfer' && orderPersons.length && orderPersons.some(p=>!p.id_groups_new)){
     return alert('Оберіть нову групу для кожної групи, доданої до наказу');
   }
 
@@ -4569,8 +4652,11 @@ async function saveOrder(){
   // Зберігаємо осіб в наказі з групами
   await delWhere('order_individuals','order_id',orderId);
   for(const p of orderPersons){
-    await post('order_individuals',{order_id:orderId,individual_id:p.individual_id,id_groups:p.id_groups||null,id_groups_new:orderType===4?(p.id_groups_new||null):null});
+    await post('order_individuals',{order_id:orderId,individual_id:p.individual_id,id_groups:p.id_groups||null,id_groups_new:orderBehavior==='transfer'?(p.id_groups_new||null):null});
   }
+
+  // Зберігаємо список ознайомлення з наказом
+  await saveOrderAcquaintances(orderId);
 
   // Якщо наказ АКТИВНИЙ (і раніше не був активним) — зараховуємо + сповіщаємо відповідальних
   if(orderState===2 && prevState!==2){
@@ -4596,7 +4682,8 @@ async function saveOrder(){
 }
 
 async function activateOrder(orderId,orderType,persons){
-  if(orderType===4){
+  const behavior=getOrderBehavior(orderType);
+  if(behavior==='transfer'){
     // ПЕРЕВЕДЕННЯ — оновлюємо id_groups в pupils на нову групу (окрему для кожної групи-джерела)
     const missing=persons.filter(p=>!p.id_groups_new);
     if(missing.length){alert('Оберіть нову групу для кожної групи, доданої до наказу');return;}
@@ -4609,8 +4696,7 @@ async function activateOrder(orderId,orderType,persons){
     }
     return;
   }
-  if(orderType===1){
-    // ЗАРАХУВАННЯ — додаємо в pupils з групою з наказу
+  if(behavior==='enroll'){
     for(const p of persons){
       const groupId=p.id_groups||null;
       const already=DB.pupils.find(pu=>pu.id_individual===p.individual_id);
@@ -4635,7 +4721,8 @@ async function activateOrder(orderId,orderType,persons){
 }
 
 async function cancelOrder(orderId,orderType,persons){
-  if(orderType===4){
+  const behavior=getOrderBehavior(orderType);
+  if(behavior==='transfer'){
     // ВІДКАТ ПЕРЕВЕДЕННЯ — повертаємо стару групу
     const orderInds=await api('order_individuals',`?order_id=eq.${orderId}`);
     const personsToRevert=Array.isArray(orderInds)?orderInds:persons;
@@ -4649,8 +4736,7 @@ async function cancelOrder(orderId,orderType,persons){
     }
     return;
   }
-  if(orderType===1){
-    // ВІДМІНА ЗАРАХУВАННЯ — видаляємо з pupils всіх осіб які є в цьому наказі
+  if(behavior==='enroll'){
     // Беремо осіб з order_individuals (найсвіжіші дані з бази)
     const orderInds = await api('order_individuals', `?order_id=eq.${orderId}`);
     const personsToCancel = Array.isArray(orderInds) ? orderInds : persons;
@@ -4665,7 +4751,7 @@ async function cancelOrder(orderId,orderType,persons){
       DB.pupils = DB.pupils.filter(pu => pu.id_individual !== indId);
     }
   }
-  if(orderType===2||orderType===3){
+  if(behavior==='expel'||behavior==='graduate'){
     // ВІДМІНА ВІДРАХУВАННЯ або ВИПУСКУ — повертаємо назад в pupils
     const orderInds = await api('order_individuals', `?order_id=eq.${orderId}`);
     const personsToRestore = Array.isArray(orderInds) ? orderInds : persons;
@@ -4963,6 +5049,16 @@ const DICTS = [
     group: 'Накази',
     cols: [
       {field:'order_type', label:'Тип', type:'text'},
+      {field:'id_behavior', label:'Дія при активації', type:'ref', ref:'dic_order_behavior', refLabel:'name'},
+    ]
+  },
+  {
+    key: 'dic_order_behavior',
+    label: '⚙️ Дії наказів (службовий)',
+    group: 'Накази',
+    cols: [
+      {field:'code', label:'Код', type:'text'},
+      {field:'name', label:'Назва', type:'text'},
     ]
   },
   {
@@ -5248,12 +5344,8 @@ async function selectOrderTemplates(){
 }
 
 function renderOrderTemplatesUI(){
-  const tabs = [
-    {t:1,label:'📥 Зарахування'},
-    {t:2,label:'📤 Відрахування'},
-    {t:3,label:'🏆 Випуск'},
-    {t:4,label:'🔄 Переведення'},
-  ];
+  const tabs = DB.orderTypes.map(t=>({t:t.id,label:t.order_type}));
+  if(templateTab==null||!DB.orderTypes.some(t=>t.id===templateTab)) templateTab=DB.orderTypes[0]?.id||1;
   const list = orderTemplates.filter(t=>t.order_type===templateTab);
   document.getElementById('dict-content').innerHTML = `
     <div style="padding:16px">
@@ -5322,6 +5414,13 @@ const TEMPLATE_PLACEHOLDERS = [
   {tag:'{{відповідальний_поіменна_посада}}', label:'Посада відповідального за поіменну книгу (давальний)'},
   {tag:'{{відповідальний_єдебо}}', label:'ПІБ відповідального за ЄДЕБО (давальний)'},
   {tag:'{{відповідальний_єдебо_посада}}', label:'Посада відповідального за ЄДЕБО (давальний)'},
+  {tag:'{{ознайомлені}}', label:'Список осіб для ознайомлення з наказом'},
+  {tag:'{{директор_імя_прізвище}}', label:'Директор: "Ім\'я ПРІЗВИЩЕ"'},
+  {tag:'{{директор_ініціали}}', label:'Директор: "Прізвище І. П."'},
+  {tag:'{{відповідальний_єдебо_імя_прізвище}}', label:'Відп. ЄДЕБО: "Ім\'я ПРІЗВИЩЕ"'},
+  {tag:'{{відповідальний_єдебо_ініціали}}', label:'Відп. ЄДЕБО: "Прізвище І. П."'},
+  {tag:'{{відповідальний_поіменна_імя_прізвище}}', label:'Відп. поіменна книга: "Ім\'я ПРІЗВИЩЕ"'},
+  {tag:'{{відповідальний_поіменна_ініціали}}', label:'Відп. поіменна книга: "Прізвище І. П."'},
 ];
 
 function openTemplateEditor(id, orderTypeForNew){
@@ -5329,7 +5428,8 @@ function openTemplateEditor(id, orderTypeForNew){
   const t = id ? orderTemplates.find(x=>x.id===id) : null;
   document.getElementById('tmpl-modal-title').textContent = id ? '✏️ Редагування шаблону' : '🆕 Новий шаблон';
   document.getElementById('tmpl-name').value = t?.name || '';
-  document.getElementById('tmpl-order-type').value = t?.order_type || orderTypeForNew || 1;
+  document.getElementById('tmpl-order-type').innerHTML = DB.orderTypes.map(ot=>`<option value="${ot.id}">${ot.order_type}</option>`).join('');
+  document.getElementById('tmpl-order-type').value = t?.order_type || orderTypeForNew || DB.orderTypes[0]?.id || 1;
   document.getElementById('tmpl-placeholders').innerHTML = TEMPLATE_PLACEHOLDERS.map(p=>
     `<button class="btn btn-sm" onclick="insertQuillText('${p.tag}')" title="${p.label}">${p.label}</button>`
   ).join('')
@@ -5415,7 +5515,7 @@ async function printOrderAsPdf(orderId){
   const groupProfessionText = g => [g.id_profession_1,g.id_profession_2,g.id_profession_3]
     .filter(Boolean).map(pid=>profsCurrent.find(p=>p.id===pid)?.name).filter(Boolean).join(', ');
 
-  let responsibleDative = '', responsiblePositionDative = '';
+  let responsibleDative = '', responsiblePositionDative = '', responsibleNS = '', responsibleInit = '';
   if(order.id_responsible_book){
     if(!DB.users||!DB.users.length){DB.users=await api('dic_users','?select=login,initials,fullname_dative,position,position_dative');}
     const u = DB.users.find(x=>x.login===order.id_responsible_book);
@@ -5424,18 +5524,41 @@ async function printOrderAsPdf(orderId){
     if(person){
       responsibleDative = person.fullname_dative || '';
       responsiblePositionDative = person.position_dative || '';
+      if(t){
+        responsibleNS = nameSurnameUpper(t.surname, t.name);
+        responsibleInit = surnameInitials(t.surname, t.name, t.middle_name);
+      } else if(u){
+        const sp = splitFullName(u.initials);
+        responsibleNS = nameSurnameUpper(sp.surname, sp.name);
+        responsibleInit = surnameInitials(sp.surname, sp.name, sp.middleName);
+      }
     }
   }
 
-  let edboRespDative = '', edboRespPositionDative = '';
+  let edboRespDative = '', edboRespPositionDative = '', edboRespNS = '', edboRespInit = '';
   if(orgSettings.edbo_responsible_login){
     if(!DB.users||!DB.users.length){DB.users=await api('dic_users','?select=login,initials,fullname_dative,position,position_dative');}
     const eu = DB.users.find(x=>x.login===orgSettings.edbo_responsible_login);
     if(eu){
       edboRespDative = eu.fullname_dative || '';
       edboRespPositionDative = eu.position_dative || '';
+      const sp = splitFullName(eu.initials);
+      edboRespNS = nameSurnameUpper(sp.surname, sp.name);
+      edboRespInit = surnameInitials(sp.surname, sp.name, sp.middleName);
     }
   }
+
+  const dirSp = splitFullName(orgSettings.director_fullname);
+  const directorNS = nameSurnameUpper(dirSp.surname, dirSp.name);
+  const directorInit = surnameInitials(dirSp.surname, dirSp.name, dirSp.middleName);
+
+  const acqRows = await api('order_acquaintances', `?order_id=eq.${order.id}&select=login`);
+  const acqNames = (Array.isArray(acqRows)?acqRows:[]).map(r=>{
+    const u = DB.users.find(x=>x.login===r.login);
+    if(u) return u.initials||u.login;
+    const t = DB.teachers.find(x=>x.login===r.login);
+    return t ? fullName(t) : r.login;
+  });
 
   const replacements = {
     '{{номер}}': order.number || '',
@@ -5453,6 +5576,13 @@ async function printOrderAsPdf(orderId){
     '{{відповідальний_поіменна_посада}}': responsiblePositionDative,
     '{{відповідальний_єдебо}}': edboRespDative,
     '{{відповідальний_єдебо_посада}}': edboRespPositionDative,
+    '{{ознайомлені}}': acqNames.join(', '),
+    '{{директор_імя_прізвище}}': directorNS,
+    '{{директор_ініціали}}': directorInit,
+    '{{відповідальний_єдебо_імя_прізвище}}': edboRespNS,
+    '{{відповідальний_єдебо_ініціали}}': edboRespInit,
+    '{{відповідальний_поіменна_імя_прізвище}}': responsibleNS,
+    '{{відповідальний_поіменна_ініціали}}': responsibleInit,
   };
 
   let html = template.html_content || '';
@@ -5460,7 +5590,7 @@ async function printOrderAsPdf(orderId){
     html = html.split(tag).join(val||'');
   }
 
-  const isTransfer = order.order_type===4;
+  const isTransfer = getOrderBehavior(order.order_type)==='transfer';
   const usesGroupAppendices = html.includes('[ДОДАТКИ_ПО_ГРУПАХ]');
 
   // Розгортаємо [ТАБЛИЦЯ_ОСІБ] у просту таблицю (для наказів без додатків по групах)
