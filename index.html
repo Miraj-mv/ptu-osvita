@@ -1959,8 +1959,8 @@ th.sortable:hover{background:var(--bg)}
     </div>
     <div id="ord-enrollment-block" style="display:none">
       <div class="form-grid" style="margin-bottom:16px">
-        <div class="form-group"><label>Дата, з якої зарахувати</label><input type="date" id="ord-enrollment-date"></div>
-        <div class="form-group">
+        <div class="form-group"><label id="ord-enrollment-date-label">Дата, з якої зарахувати</label><input type="date" id="ord-enrollment-date"></div>
+        <div class="form-group" id="ord-responsible-book-group">
           <label>Відповідальний за поіменну книгу</label>
           <input type="text" id="ord-responsible-book" list="order-responsible-datalist" placeholder="Оберіть користувача">
           <datalist id="order-responsible-datalist"></datalist>
@@ -4342,14 +4342,17 @@ function onOrderTypeChange(){
   const type=parseInt(document.getElementById('ord-type').value);
   const behavior=getOrderBehavior(type);
   const titles={enroll:'Особи для зарахування',expel:'Особи для відрахування',graduate:'Особи для випуску',transfer:'Особи для переведення'};
+  const dateLabels={enroll:'Дата, з якої зарахувати',expel:'Дата, з якої відрахувати',graduate:'Дата випуску',transfer:'Дата, з якої перевести'};
   document.getElementById('ord-persons-title').textContent=titles[behavior]||'Особи';
   // Для переведення показуємо блок вибору нової групи
   const transferBlock=document.getElementById('transfer-group-block');
   if(transferBlock) transferBlock.style.display=behavior==='transfer'?'flex':'none';
   const enrollBlock=document.getElementById('ord-enrollment-block');
   if(enrollBlock){
-    enrollBlock.style.display=behavior==='enroll'?'block':'none';
-    if(behavior==='enroll') populateOrderResponsibleDatalist();
+    enrollBlock.style.display=behavior?'block':'none';
+    document.getElementById('ord-enrollment-date-label').textContent=dateLabels[behavior]||'Дата';
+    document.getElementById('ord-responsible-book-group').style.display=behavior==='enroll'?'block':'none';
+    if(behavior) populateOrderResponsibleDatalist();
   }
 }
 async function populateOrderResponsibleDatalist(){
@@ -4633,7 +4636,7 @@ async function saveOrder(){
   const orderBehavior=getOrderBehavior(orderType);
   const orderState=parseInt(document.getElementById('ord-state').value);
   const orderData={number:num,date:document.getElementById('ord-date').value||null,order_type:orderType,state:orderState,
-    enrollment_date: orderBehavior==='enroll'?(document.getElementById('ord-enrollment-date').value||null):null,
+    enrollment_date: orderBehavior?(document.getElementById('ord-enrollment-date').value||null):null,
     id_responsible_book: orderBehavior==='enroll'?(document.getElementById('ord-responsible-book').value.trim()||null):null,
   };
 
