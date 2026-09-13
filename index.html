@@ -3091,6 +3091,13 @@ function surnameInitials(surname,name,middleName){
   const inits=[name,middleName].filter(Boolean).map(p=>p.charAt(0).toUpperCase()+'.').join(' ');
   return inits?`${surname} ${inits}`:surname;
 }
+// Прізвище в давальному (перше слово fullname_dative) + ініціали без пробілу: "Жирному В.С."
+function surnameDativeInitials(fullnameDative,name,middleName){
+  const dativeSurname=(fullnameDative||'').trim().split(/\s+/)[0]||'';
+  const inits=[name,middleName].filter(Boolean).map(p=>p.charAt(0).toUpperCase()+'.').join('');
+  if(!dativeSurname)return '';
+  return inits?`${dativeSurname} ${inits}`:dativeSurname;
+}
 function buildGroupedPersonsTable(persons,docCell,bestDoc,profCurrentById){
   const byGroup={};
   persons.forEach(s=>{(byGroup[s.id_group_planning]=byGroup[s.id_group_planning]||[]).push(s);});
@@ -5085,6 +5092,7 @@ function renderDictMenu() {
   if (!groups['Накази']) groups['Накази'] = [];
   groups['Накази'].push({key:'order-templates', label:'🖨 Шаблони наказів', _special:true});
   groups['Накази'].push({key:'edbo-responsible', label:'👤 Відповідальний за ЄДЕБО', _special:true, _fn:'selectEdboResponsible'});
+  groups['Накази'].push({key:'deputy-director', label:'👤 Заступник директора з НВР', _special:true, _fn:'selectDeputyDirector'});
   if (!groups['Вступна кампанія']) groups['Вступна кампанія'] = [];
   groups['Вступна кампанія'].push({key:'admission-campaigns', label:'🎓 Конкурсні пропозиції', _special:true, _fn:'selectAdmissionCampaigns'});
   let html = '';
@@ -5290,10 +5298,15 @@ async function confirmCopyCampaign(){
 }
 
 // ══════════════════ ВІДПОВІДАЛЬНИЙ ЗА ЄДЕБО ══════════════════
-async function selectEdboResponsible(){
-  currentDict = 'edbo-responsible';
+const SINGLE_PERSON_SETTINGS = {
+  'edbo-responsible': {settingKey:'edbo_responsible_login', title:'👤 Відповідальний за ЄДЕБО', label:'Відповідальний за ЄДЕБО', hint:'Ця людина використовується в наказах — її ПІБ та посада (у давальному відмінку) підставляються замість плейсхолдерів {{відповідальний_єдебо}} / {{відповідальний_єдебо_посада}}.'},
+  'deputy-director': {settingKey:'deputy_director_login', title:'👤 Заступник директора з НВР', label:'Заступник директора з НВР', hint:'Ця людина використовується в наказах (пункт "Контроль за виконанням...") — плейсхолдери {{заступник}} / {{заступник_давальний}} / {{заступник_посада_давальний}} / {{заступник_імя_прізвище}} / {{заступник_ініціали}}.'},
+};
+async function selectSinglePersonSetting(key){
+  currentDict = key;
   renderDictMenu();
-  document.getElementById('dict-title').textContent = '👤 Відповідальний за ЄДЕБО';
+  const cfg = SINGLE_PERSON_SETTINGS[key];
+  document.getElementById('dict-title').textContent = cfg.title;
   document.getElementById('dict-add-btn').style.display = 'none';
   const w = document.getElementById('dict-search-wrap');
   if(w) w.remove();
@@ -5302,34 +5315,38 @@ async function selectEdboResponsible(){
   orgSettings = {};
   (Array.isArray(settings)?settings:[]).forEach(s=>{orgSettings[s.key]=s.value;});
   if(!DB.users||!DB.users.length){DB.users=await api('dic_users','?select=login,initials,fullname_dative,position,position_dative');}
-  renderEdboResponsibleUI();
+  renderSinglePersonSettingUI(key);
 }
-function renderEdboResponsibleUI(){
-  const current = DB.users.find(u=>u.login===orgSettings.edbo_responsible_login);
+function renderSinglePersonSettingUI(key){
+  const cfg = SINGLE_PERSON_SETTINGS[key];
+  const current = DB.users.find(u=>u.login===orgSettings[cfg.settingKey]);
   document.getElementById('dict-content').innerHTML = `
     <div style="padding:16px;max-width:480px">
-      <div style="font-size:12px;color:var(--muted);margin-bottom:14px">Ця людина використовується в наказах — її ПІБ та посада (у давальному відмінку) підставляються замість плейсхолдерів {{відповідальний_єдебо}} / {{відповідальний_єдебо_посада}}.</div>
+      <div style="font-size:12px;color:var(--muted);margin-bottom:14px">${cfg.hint}</div>
       <div class="form-group" style="margin-bottom:12px">
-        <label>Відповідальний за ЄДЕБО</label>
-        <input type="text" id="edbo-resp-input" list="edbo-resp-datalist" value="${current?current.login:''}" placeholder="Оберіть користувача">
-        <datalist id="edbo-resp-datalist">${DB.users.map(u=>`<option value="${u.login}">${(u.initials||u.login).replace(/"/g,'&quot;')}</option>`).join('')}</datalist>
+        <label>${cfg.label}</label>
+        <input type="text" id="sps-input" list="sps-datalist" value="${current?current.login:''}" placeholder="Оберіть користувача">
+        <datalist id="sps-datalist">${DB.users.map(u=>`<option value="${u.login}">${(u.initials||u.login).replace(/"/g,'&quot;')}</option>`).join('')}</datalist>
       </div>
       ${current?`<div style="font-size:12px;color:var(--muted);margin-bottom:12px">
         ПІБ (давальний): ${current.fullname_dative||'<span style="color:#DC2626">не заповнено в профілі</span>'}<br>
         Посада (давальна): ${current.position_dative||'<span style="color:#DC2626">не заповнено в профілі</span>'}
       </div>`:''}
-      <button class="btn btn-primary btn-sm" onclick="saveEdboResponsible()">💾 Зберегти</button>
+      <button class="btn btn-primary btn-sm" onclick="saveSinglePersonSetting('${key}')">💾 Зберегти</button>
     </div>`;
 }
-async function saveEdboResponsible(){
-  const login = document.getElementById('edbo-resp-input').value.trim();
+async function saveSinglePersonSetting(key){
+  const cfg = SINGLE_PERSON_SETTINGS[key];
+  const login = document.getElementById('sps-input').value.trim();
   const user = DB.users.find(u=>u.login===login);
   if(login && !user){alert('Такого користувача немає в довіднику. Оберіть зі списку підказок.');return;}
-  await fetch(`${SB}/rest/v1/org_settings?key=eq.edbo_responsible_login`, {method:'PATCH', headers:H, body: JSON.stringify({value: login||null})});
-  orgSettings.edbo_responsible_login = login||'';
+  await fetch(`${SB}/rest/v1/org_settings?key=eq.${cfg.settingKey}`, {method:'PATCH', headers:H, body: JSON.stringify({value: login||null})});
+  orgSettings[cfg.settingKey] = login||'';
   alert('✅ Збережено');
-  renderEdboResponsibleUI();
+  renderSinglePersonSettingUI(key);
 }
+async function selectEdboResponsible(){ await selectSinglePersonSetting('edbo-responsible'); }
+async function selectDeputyDirector(){ await selectSinglePersonSetting('deputy-director'); }
 
 async function selectOrderTemplates(){
   currentDict = 'order-templates';
@@ -5354,6 +5371,7 @@ function renderOrderTemplatesUI(){
         <div class="form-grid" style="margin-top:12px">
           <div class="form-group" style="grid-column:1/-1"><label>Назва закладу</label><input type="text" id="org-school-name" value="${(orgSettings.school_name||'').replace(/"/g,'&quot;')}"></div>
           <div class="form-group"><label>Населений пункт</label><input type="text" id="org-location" value="${(orgSettings.location||'').replace(/"/g,'&quot;')}" placeholder="Мала Виска"></div>
+          <div class="form-group"><label>Код ЄДРПОУ</label><input type="text" id="org-edrpou" value="${(orgSettings.edrpou||'').replace(/"/g,'&quot;')}" placeholder="03070722"></div>
           <div class="form-group"><label>ПІБ директора</label><input type="text" id="org-director-fullname" value="${(orgSettings.director_fullname||'').replace(/"/g,'&quot;')}"></div>
           <div class="form-group"><label>ПІБ директора (давальний)</label><input type="text" id="org-director-fullname-dative" value="${(orgSettings.director_fullname_dative||'').replace(/"/g,'&quot;')}"></div>
           <div class="form-group"><label>Посада директора</label><input type="text" id="org-director-position" value="${(orgSettings.director_position||'').replace(/"/g,'&quot;')}"></div>
@@ -5386,6 +5404,7 @@ async function saveOrgSettings(){
   const fields = {
     school_name: document.getElementById('org-school-name').value.trim(),
     location: document.getElementById('org-location').value.trim(),
+    edrpou: document.getElementById('org-edrpou').value.trim(),
     director_fullname: document.getElementById('org-director-fullname').value.trim(),
     director_fullname_dative: document.getElementById('org-director-fullname-dative').value.trim(),
     director_position: document.getElementById('org-director-position').value.trim(),
@@ -5419,8 +5438,16 @@ const TEMPLATE_PLACEHOLDERS = [
   {tag:'{{директор_ініціали}}', label:'Директор: "Прізвище І. П."'},
   {tag:'{{відповідальний_єдебо_імя_прізвище}}', label:'Відп. ЄДЕБО: "Ім\'я ПРІЗВИЩЕ"'},
   {tag:'{{відповідальний_єдебо_ініціали}}', label:'Відп. ЄДЕБО: "Прізвище І. П."'},
+  {tag:'{{єдрпоу}}', label:'Код ЄДРПОУ закладу'},
+  {tag:'{{відповідальний_єдебо_прізвище_дав_ініціали}}', label:'Відп. ЄДЕБО: "Прізвищу В.С." (давальний+ініц. без пробілу)'},
   {tag:'{{відповідальний_поіменна_імя_прізвище}}', label:'Відп. поіменна книга: "Ім\'я ПРІЗВИЩЕ"'},
   {tag:'{{відповідальний_поіменна_ініціали}}', label:'Відп. поіменна книга: "Прізвище І. П."'},
+  {tag:'{{заступник_давальний}}', label:'ПІБ заступника директора з НВР (давальний)'},
+  {tag:'{{заступник_посада}}', label:'Посада заступника (називний)'},
+  {tag:'{{заступник_посада_давальний}}', label:'Посада заступника (давальний)'},
+  {tag:'{{заступник_імя_прізвище}}', label:'Заступник: "Ім\'я ПРІЗВИЩЕ"'},
+  {tag:'{{заступник_ініціали}}', label:'Заступник: "Прізвище І. П."'},
+  {tag:'{{заступник_прізвище_дав_ініціали}}', label:'Заступник: "Прізвищу В.С." (давальний+ініц.)'},
 ];
 
 function openTemplateEditor(id, orderTypeForNew){
@@ -5434,6 +5461,8 @@ function openTemplateEditor(id, orderTypeForNew){
     `<button class="btn btn-sm" onclick="insertQuillText('${p.tag}')" title="${p.label}">${p.label}</button>`
   ).join('')
     + `<button class="btn btn-sm" style="background:#EEF2FF;color:var(--accent)" onclick="insertQuillText('[ТАБЛИЦЯ_ОСІБ]')">📋 Проста таблиця осіб</button>`
+    + `<button class="btn btn-sm" style="background:#EEF2FF;color:var(--accent)" onclick="insertQuillText('[СПИСОК_ЗА_ГРУПАМИ]')">🔢 Нумерований список по групах</button>`
+    + `<button class="btn btn-sm" style="background:#EEF2FF;color:var(--accent)" onclick="insertQuillText('[ОЗНАЙОМЛЕНІ_БЛОК]')">✍️ Список ознайомлення (з підписами)</button>`
     + `<button class="btn btn-sm" style="background:#EEF2FF;color:var(--accent)" onclick="insertQuillText('[ДОДАТКИ_ПО_ГРУПАХ]')">📑 Додатки по групах (як в офіційній формі)</button>`;
 
   document.getElementById('modal-order-template').classList.add('open');
@@ -5535,7 +5564,7 @@ async function printOrderAsPdf(orderId){
     }
   }
 
-  let edboRespDative = '', edboRespPositionDative = '', edboRespNS = '', edboRespInit = '';
+  let edboRespDative = '', edboRespPositionDative = '', edboRespNS = '', edboRespInit = '', edboRespDativeInit = '';
   if(orgSettings.edbo_responsible_login){
     if(!DB.users||!DB.users.length){DB.users=await api('dic_users','?select=login,initials,fullname_dative,position,position_dative');}
     const eu = DB.users.find(x=>x.login===orgSettings.edbo_responsible_login);
@@ -5545,6 +5574,22 @@ async function printOrderAsPdf(orderId){
       const sp = splitFullName(eu.initials);
       edboRespNS = nameSurnameUpper(sp.surname, sp.name);
       edboRespInit = surnameInitials(sp.surname, sp.name, sp.middleName);
+      edboRespDativeInit = surnameDativeInitials(eu.fullname_dative, sp.name, sp.middleName);
+    }
+  }
+
+  let deputyDative = '', deputyPositionDative = '', deputyNS = '', deputyInit = '', deputyDativeInit = '', deputyPositionNom = '';
+  if(orgSettings.deputy_director_login){
+    if(!DB.users||!DB.users.length){DB.users=await api('dic_users','?select=login,initials,fullname_dative,position,position_dative');}
+    const du = DB.users.find(x=>x.login===orgSettings.deputy_director_login);
+    if(du){
+      deputyDative = du.fullname_dative || '';
+      deputyPositionDative = du.position_dative || '';
+      deputyPositionNom = du.position || '';
+      const sp = splitFullName(du.initials);
+      deputyNS = nameSurnameUpper(sp.surname, sp.name);
+      deputyInit = surnameInitials(sp.surname, sp.name, sp.middleName);
+      deputyDativeInit = surnameDativeInitials(du.fullname_dative, sp.name, sp.middleName);
     }
   }
 
@@ -5553,18 +5598,26 @@ async function printOrderAsPdf(orderId){
   const directorInit = surnameInitials(dirSp.surname, dirSp.name, dirSp.middleName);
 
   const acqRows = await api('order_acquaintances', `?order_id=eq.${order.id}&select=login`);
-  const acqNames = (Array.isArray(acqRows)?acqRows:[]).map(r=>{
+  const acqNamesPlain = (Array.isArray(acqRows)?acqRows:[]).map(r=>{
     const u = DB.users.find(x=>x.login===r.login);
     if(u) return u.initials||u.login;
     const t = DB.teachers.find(x=>x.login===r.login);
     return t ? fullName(t) : r.login;
   });
+  const acqHtml = (Array.isArray(acqRows)?acqRows:[]).map(r=>{
+    const u = DB.users.find(x=>x.login===r.login);
+    let ns='';
+    if(u){const sp=splitFullName(u.initials);ns=nameSurnameUpper(sp.surname,sp.name);}
+    else{const t=DB.teachers.find(x=>x.login===r.login);if(t)ns=nameSurnameUpper(t.surname,t.name);}
+    return `<p>_________________________ ${ns||r.login}</p><p style="font-size:10px">«____» _______________ ${new Date().getFullYear()} р.</p>`;
+  }).join('');
 
   const replacements = {
     '{{номер}}': order.number || '',
     '{{дата}}': fmtDate(order.date) || '',
     '{{заклад}}': orgSettings.school_name || '',
     '{{населений_пункт}}': orgSettings.location || '',
+    '{{єдрпоу}}': orgSettings.edrpou || '',
     '{{директор}}': orgSettings.director_fullname || '',
     '{{директор_давальний}}': orgSettings.director_fullname_dative || '',
     '{{директор_посада}}': orgSettings.director_position || '',
@@ -5576,13 +5629,21 @@ async function printOrderAsPdf(orderId){
     '{{відповідальний_поіменна_посада}}': responsiblePositionDative,
     '{{відповідальний_єдебо}}': edboRespDative,
     '{{відповідальний_єдебо_посада}}': edboRespPositionDative,
-    '{{ознайомлені}}': acqNames.join(', '),
+    '{{ознайомлені}}': acqNamesPlain.join(', '),
     '{{директор_імя_прізвище}}': directorNS,
     '{{директор_ініціали}}': directorInit,
     '{{відповідальний_єдебо_імя_прізвище}}': edboRespNS,
     '{{відповідальний_єдебо_ініціали}}': edboRespInit,
+    '{{відповідальний_єдебо_прізвище_дав_ініціали}}': edboRespDativeInit,
     '{{відповідальний_поіменна_імя_прізвище}}': responsibleNS,
     '{{відповідальний_поіменна_ініціали}}': responsibleInit,
+    '{{заступник}}': deputyDative,
+    '{{заступник_давальний}}': deputyDative,
+    '{{заступник_посада}}': deputyPositionNom,
+    '{{заступник_посада_давальний}}': deputyPositionDative,
+    '{{заступник_імя_прізвище}}': deputyNS,
+    '{{заступник_ініціали}}': deputyInit,
+    '{{заступник_прізвище_дав_ініціали}}': deputyDativeInit,
   };
 
   let html = template.html_content || '';
@@ -5610,6 +5671,33 @@ async function printOrderAsPdf(orderId){
     <tbody>${rows}</tbody>
   </table>`;
   html = html.split('[ТАБЛИЦЯ_ОСІБ]').join(tableHtml);
+  html = html.split('[ОЗНАЙОМЛЕНІ_БЛОК]').join(acqHtml);
+
+  // [СПИСОК_ЗА_ГРУПАМИ] — по кожній групі: рядок "- на базі ... з групи № N за професією: «...»" + нумерований список ПІБ
+  if(html.includes('[СПИСОК_ЗА_ГРУПАМИ]')){
+    const groupIdsForList = [...new Set(persons.map(p=>p.id_groups).filter(Boolean))];
+    const groupsForList = groupIdsForList.map(gid=>DB.groups.find(g=>g.id===gid)).filter(Boolean)
+      .sort((a,b)=>(a.group_number||'').localeCompare(b.group_number||'',undefined,{numeric:true}));
+    let campaignsForList=[];
+    if(groupsForList.length){
+      campaignsForList = await api('admission_campaigns', `?id_groups=in.(${groupsForList.map(g=>g.id).join(',')})`);
+    }
+    let listBlockHtml='';
+    groupsForList.forEach(g=>{
+      const camp=(campaignsForList||[]).find(c=>c.id_groups===g.id);
+      const basis=camp?.education_basis||'';
+      const groupPersons=persons.filter(p=>p.id_groups===g.id);
+      listBlockHtml+=`<p>- ${basis?'на базі '+basis+' ':''}з групи № ${g.group_number} за професією: «${groupProfessionText(g)}»</p>`;
+      listBlockHtml+=`<ol>`;
+      groupPersons.forEach(p=>{
+        const ind=DB.individuals.find(x=>x.id===p.individual_id);
+        listBlockHtml+=`<li>${ind?fullName(ind):''}</li>`;
+      });
+      listBlockHtml+=`</ol>`;
+    });
+    html = html.split('[СПИСОК_ЗА_ГРУПАМИ]').join(listBlockHtml);
+  }
+
   html = html.split('[ДОДАТКИ_ПО_ГРУПАХ]').join(''); // цей текстовий токен прибираємо — додатки будуються нижче окремо як pdfmake-контент
 
   const mainContent = htmlToPdfmake(html, { window });
